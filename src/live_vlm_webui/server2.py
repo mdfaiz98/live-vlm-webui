@@ -173,7 +173,6 @@ async def detect_local_service_and_model():
     Returns: (api_base, model_name) or (None, None) if no service found
     """
     services = [
-        ("http://127.0.0.1:18182/v1", "GenieX (via fix-up proxy)"),
         ("http://localhost:11434/v1", "Ollama"),
         ("http://localhost:8000/v1", "vLLM"),
         ("http://localhost:30000/v1", "SGLang"),
@@ -199,12 +198,6 @@ async def detect_local_service_and_model():
 
                             # If no vision model found, use the first one
                             model_id = models[0].get("id", "")
-                            if service_name.startswith("GenieX"):
-                                # GenieX's own /v1/models advertises a precision-tagged
-                                # id (e.g. ":W4A16") that /v1/chat/completions then
-                                # rejects - strip it so auto-detect doesn't walk
-                                # straight into that known bug.
-                                model_id = model_id.split(":")[0]
                             logger.info(f"✅ Auto-detected {service_name} at {api_base}")
                             logger.info(
                                 f"   Selected model: {model_id} (vision model preferred but not found)"
@@ -218,19 +211,8 @@ async def detect_local_service_and_model():
 
 
 async def index(request):
-    """Serve the main HTML page, with the actual configured API base URL and
-    model (from --api-base / --model at startup) injected in place of the
-    hardcoded Ollama default - so the field is correct on page load without
-    relying on auto-detection or manual entry."""
+    """Serve the main HTML page"""
     content = open(os.path.join(os.path.dirname(__file__), "static", "index.html"), "r").read()
-
-    configured_api_base = default_vlm_config.get("api_base")
-    if configured_api_base:
-        content = content.replace(
-            'id="apiBaseUrl" value="http://localhost:11434/v1"',
-            f'id="apiBaseUrl" value="{configured_api_base}"',
-        )
-
     return web.Response(content_type="text/html", text=content)
 
 

@@ -19,7 +19,7 @@ limitations under the License.
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advantech Live VLM</title>
+    <title>Live VLM WebUI - NVIDIA AI Platform</title>
 
     <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="favicon/favicon.svg">
@@ -371,11 +371,10 @@ limitations under the License.
         .sidebar {
             width: 350px;
             background: var(--bg-secondary);
-            border-left: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
             overflow-y: auto;
             overflow-x: visible;
             padding: 20px;
-            order: 2;
         }
 
         .panel {
@@ -734,7 +733,6 @@ limitations under the License.
             display: flex;
             flex-direction: column;
             gap: 20px;
-            order: 1;
         }
 
 
@@ -1570,90 +1568,6 @@ limitations under the License.
             background: var(--warning-color);
         }
 
-        /* Circular ring gauges (CPU / RAM) */
-        .ring-gauge-wrapper {
-            position: relative;
-            width: 100px;
-            height: 100px;
-            margin: 4px auto 8px;
-        }
-
-        .ring-gauge {
-            width: 100%;
-            height: 100%;
-            transform: rotate(-90deg);
-        }
-
-        .ring-track {
-            fill: none;
-            stroke: var(--bg-tertiary);
-            stroke-width: 10;
-        }
-
-        .ring-fill {
-            fill: none;
-            stroke: var(--accent-color);
-            stroke-width: 10;
-            stroke-linecap: round;
-            transition: stroke-dashoffset 0.3s ease;
-        }
-
-        .ring-fill.high {
-            stroke: var(--warning-color);
-        }
-
-        .ring-center-text {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            line-height: 1.15;
-        }
-
-        /* Thermal card */
-        .thermal-card {
-            min-width: 260px;
-        }
-
-        .thermal-card .stat-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 8px;
-        }
-
-        .thermal-legend {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .thermal-legend-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            color: var(--text-primary);
-            white-space: nowrap;
-        }
-
-        .thermal-legend-swatch {
-            width: 10px;
-            height: 10px;
-            border-radius: 2px;
-            display: inline-block;
-        }
-
-        .thermal-chart {
-            width: 100%;
-            height: 70px;
-        }
-
         .sparkline {
             width: 100%;
             height: 40px;
@@ -2077,11 +1991,23 @@ limitations under the License.
     <!-- Header -->
     <div class="header">
         <div class="header-left">
-            <div class="logo" style="background: #ffffff; border-radius: 6px; padding: 4px 8px; display: flex; align-items: center;">
-                <img src="/images/advantech-logo.jpg" alt="Advantech" style="height: 32px; width: auto; display: block;">
+            <div class="logo">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     width="42"
+                     height="42"
+                     viewBox="0 0 1024 1024"
+                     fill="none"
+                     style="color: var(--accent-color);">
+                    <!-- All parts become accent color (NVIDIA green) -->
+                    <path fill="currentColor" d="M1024 727.183 511.134 1024 0 729.493V601.5l511.134 296L1024 601.5z"/>
+
+                    <path fill="currentColor" d="M968.916 53.23c20.567-11.874 37.244-2.248 37.244 21.5v452.571c0 23.748-16.678 52.625-37.244 64.5L568.653 822.893c-20.566 11.874-37.239 2.248-37.239-21.5V348.821c0-23.748 16.673-52.626 37.239-64.5zM592 407.121v304.172c0 18.777 13.183 26.389 29.445 17l303.11-175.001c16.262-9.389 29.445-32.222 29.445-51V198.12zm35-89.894c0-15.037-10.745-21.023-24-13.371-13.255 7.653-24 26.046-24 41.083s10.745 21.024 24 13.371c13.255-7.652 24-26.046 24-41.083M427.702 479.5v337L25 584V247zM216.603 440C168.773 412.386 130 434.772 130 490s38.773 122.386 86.603 150 86.602 5.228 86.602-50-38.773-122.386-86.602-150m146.855 44.544c-12.955-7.48-23.458-1.417-23.458 13.543s10.503 33.151 23.458 40.631 23.458 1.415 23.458-13.544c0-14.96-10.503-33.15-23.458-40.63"/>
+
+                    <path fill="currentColor" d="m455.5 464-403-233.5 38.5-21 404.5 232V778l-40 24.5zM501.5 363.5v40L128.644 191.366 166 169.799zM513.5 298c-6.5 9-9 15.5-12 25.5L198 153l31-17zM931 519.064 715 643.772v-88.949l20.784-11.999v64.948l174.431-100.708v-64.967c8.419-5.181 15.888-14.149 20.785-24.097zM895.288 276.814c15.305-8.836 27.713-1.673 27.713 16v80c0 17.673-12.408 39.164-27.713 48L654.713 559.71c-15.306 8.837-27.713 1.674-27.713-16v-80c0-17.673 12.407-39.163 27.713-48zM663.882 457.792v31.943l158.18-91.325v-31.943z"/>
+                </svg>
             </div>
             <div class="title-section">
-                <h1>Advantech Live VLM</h1>
+                <h1>Live VLM WebUI</h1>
                 <div class="subtitle">Real-time Vision Language Model Benchmark/Evaluation Tool</div>
             </div>
         </div>
@@ -2572,17 +2498,33 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-header">
-                            <span class="stat-label">CPU Utilization</span>
+                            <span class="stat-label">GPU Utilization</span>
+                            <span class="stat-value" id="gpuUtil">--%</span>
                         </div>
-                        <div class="ring-gauge-wrapper">
-                            <svg class="ring-gauge" viewBox="0 0 100 100">
-                                <circle class="ring-track" cx="50" cy="50" r="42"></circle>
-                                <circle class="ring-fill" id="cpuRing" cx="50" cy="50" r="42"
-                                        stroke-dasharray="263.9" stroke-dashoffset="263.9"></circle>
-                            </svg>
-                            <div class="ring-center-text">
-                                <span class="stat-value" id="cpuUtil">--%</span>
-                            </div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill" id="gpuUtilBar" style="width: 0%"></div>
+                        </div>
+                        <canvas id="gpuUtilSparkline" class="sparkline"></canvas>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">VRAM Usage</span>
+                            <span class="stat-value" id="vramUsage">-- GB</span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill" id="vramBar" style="width: 0%"></div>
+                        </div>
+                        <canvas id="vramSparkline" class="sparkline"></canvas>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">CPU Utilization</span>
+                            <span class="stat-value" id="cpuUtil">--%</span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill" id="cpuBar" style="width: 0%"></div>
                         </div>
                         <canvas id="cpuSparkline" class="sparkline"></canvas>
                     </div>
@@ -2590,39 +2532,12 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
                     <div class="stat-card">
                         <div class="stat-header">
                             <span class="stat-label">System RAM</span>
+                            <span class="stat-value" id="ramUsage">-- GB</span>
                         </div>
-                        <div class="ring-gauge-wrapper">
-                            <svg class="ring-gauge" viewBox="0 0 100 100">
-                                <circle class="ring-track" cx="50" cy="50" r="42"></circle>
-                                <circle class="ring-fill" id="ramRing" cx="50" cy="50" r="42"
-                                        stroke-dasharray="263.9" stroke-dashoffset="263.9"></circle>
-                            </svg>
-                            <div class="ring-center-text">
-                                <span class="stat-value" id="ramUsage" style="font-size: 14px;">-- GB</span>
-                            </div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill" id="ramBar" style="width: 0%"></div>
                         </div>
                         <canvas id="ramSparkline" class="sparkline"></canvas>
-                    </div>
-
-                    <div class="stat-card thermal-card">
-                        <div class="stat-header">
-                            <span class="stat-label">Thermal</span>
-                            <div class="thermal-legend">
-                                <span class="thermal-legend-item">
-                                    <span class="thermal-legend-swatch" style="background:#2196F3;"></span>
-                                    CPU: <span id="cpuTempValue">-- &deg;C</span>
-                                </span>
-                                <span class="thermal-legend-item">
-                                    <span class="thermal-legend-swatch" style="background:#FF9800;"></span>
-                                    iGPU: <span id="gpuTempValue">-- &deg;C</span>
-                                </span>
-                                <span class="thermal-legend-item">
-                                    <span class="thermal-legend-swatch" style="background:#9C27B0;"></span>
-                                    NPU: <span id="npuTempValue">-- &deg;C</span>
-                                </span>
-                            </div>
-                        </div>
-                        <canvas id="thermalChart" class="thermal-chart"></canvas>
                     </div>
                 </div>
             </div>
@@ -3826,56 +3741,6 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
             ctx.fill();
         }
 
-        // Multi-series line chart (used for the Thermal card: CPU / iGPU / NPU temps)
-        // series: array of { data: number[]|null, color: '#hex' }
-        function drawMultiSparkline(canvas, series) {
-            const ctx = canvas.getContext('2d');
-            const width = canvas.width;
-            const height = canvas.height;
-
-            ctx.clearRect(0, 0, width, height);
-
-            // Determine a shared scale across all series so lines are comparable
-            const allValues = [];
-            series.forEach(s => {
-                if (s.data) {
-                    s.data.forEach(v => { if (v !== null && v !== undefined) allValues.push(v); });
-                }
-            });
-            if (allValues.length === 0) return;
-
-            const min = Math.min(...allValues);
-            const max = Math.max(...allValues, min + 1);
-            const range = (max - min) || 1;
-            // Small padding so lines don't touch the very top/bottom edge
-            const pad = height * 0.1;
-
-            series.forEach(s => {
-                if (!s.data || s.data.length === 0) return;
-                const validData = s.data.map(v => (v === null || v === undefined) ? null : v);
-                const step = width / (validData.length - 1 || 1);
-
-                ctx.strokeStyle = s.color;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-
-                let started = false;
-                validData.forEach((value, index) => {
-                    if (value === null) return;  // gap for missing readings
-                    const x = index * step;
-                    const y = height - pad - ((value - min) / range) * (height - 2 * pad);
-                    if (!started) {
-                        ctx.moveTo(x, y);
-                        started = true;
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                });
-
-                ctx.stroke();
-            });
-        }
-
         // Get product image based on system stats
         function getSystemProductImage(stats) {
             const productName = stats.product_name || '';
@@ -3968,21 +3833,7 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
             // Helper: Remove frequency from CPU name for compact display
             const cpuModelShort = cpuModel.replace(/\s*@\s*[\d.]+\s*[GM]Hz/gi, '').replace(/\s+/g, ' ').trim();
 
-            if (stats.qc_board_name) {
-                // Qualcomm Snapdragon/Dragonwing board (e.g. Advantech AIR-055 / QCS9075)
-                // Three-line format: board+SoC+CPU (hostname), GPU/NPU, OS/kernel
-                const qcSoc = stats.qc_soc_name ? ` (${stats.qc_soc_name})` : '';
-                const qcCpu = stats.qc_cpu_model ? ` with ${stats.qc_cpu_model}` : '';
-                const qcGpu = stats.qc_gpu_name || 'Adreno GPU';
-                const qcNpu = stats.qc_npu_name ? ` &middot; ${stats.qc_npu_name}` : '';
-                const osLine = stats.os_pretty
-                    ? `${stats.os_pretty}${stats.kernel_version ? ' (' + stats.kernel_version + ')' : ''}`
-                    : '';
-                systemInfoElem.innerHTML =
-                    `<b>${stats.qc_board_name}</b>${qcSoc} (<code>${hostname}</code>)${qcCpu}<br>` +
-                    `${qcGpu}${qcNpu}` +
-                    (osLine ? `<br>${osLine}` : '');
-            } else if (boardName && typeof boardName === 'string') {
+            if (boardName && typeof boardName === 'string') {
                 // Jetson: Two-line format
                 // Line 1: Board name (hostname)
                 // Line 2: GPU name
@@ -4044,30 +3895,61 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
                 productImg.style.display = 'none';
             }
 
-            // CPU (Blue) - circular ring gauge
+            // GPU (Green)
+            const gpuPercent = stats.gpu_percent;
+            if (gpuPercent === null || gpuPercent === undefined) {
+                // GPU utilization unavailable (e.g., Mac without sudo)
+                document.getElementById('gpuUtil').textContent = 'N/A';
+                const gpuBar = document.getElementById('gpuUtilBar');
+                gpuBar.style.width = '0%';
+                gpuBar.style.background = '#666';  // Gray for unavailable
+            } else {
+                document.getElementById('gpuUtil').textContent = `${gpuPercent.toFixed(1)}%`;
+                const gpuBar = document.getElementById('gpuUtilBar');
+                gpuBar.style.width = `${gpuPercent}%`;
+                gpuBar.style.background = '#4CAF50';  // Green
+            }
+
+            // VRAM (Purple)
+            const vramUsed = stats.vram_used_gb;
+            const vramTotal = stats.vram_total_gb;
+            const vramPercent = stats.vram_percent;
+            if (vramUsed === null || vramUsed === undefined || vramTotal === null || vramTotal === undefined) {
+                // VRAM unavailable (e.g., GB10/Blackwell GPUs)
+                document.getElementById('vramUsage').textContent = 'N/A';
+                const vramBar = document.getElementById('vramBar');
+                vramBar.style.width = '0%';
+                vramBar.style.background = '#666';  // Gray for unavailable
+            } else {
+                document.getElementById('vramUsage').innerHTML = `${vramUsed.toFixed(1)}<span class="stat-value-denominator">/${vramTotal.toFixed(1)} GB</span>`;
+                const vramBar = document.getElementById('vramBar');
+                vramBar.style.width = `${vramPercent}%`;
+                vramBar.style.background = '#9C27B0';  // Purple
+            }
+
+            // CPU (Blue)
             const cpuPercent = stats.cpu_percent || 0;
             document.getElementById('cpuUtil').textContent = `${cpuPercent.toFixed(1)}%`;
-            setRingProgress('cpuRing', cpuPercent, 263.9);
+            const cpuBar = document.getElementById('cpuBar');
+            cpuBar.style.width = `${cpuPercent}%`;
+            cpuBar.style.background = '#2196F3';  // Blue
 
-            // RAM (Orange) - circular ring gauge
+            // RAM (Orange)
             const ramUsed = stats.ram_used_gb || 0;
             const ramTotal = stats.ram_total_gb || 0;
             const ramPercent = stats.ram_percent || 0;
-            document.getElementById('ramUsage').innerHTML = `${ramUsed.toFixed(1)}<span class="stat-value-denominator">/${ramTotal.toFixed(1)}GB</span>`;
-            setRingProgress('ramRing', ramPercent, 263.9);
-
-            // Thermal (CPU / iGPU / NPU) - current values
-            const fmtTemp = (t) => (t === null || t === undefined) ? 'N/A' : `${t.toFixed(1)}\u00b0C`;
-            document.getElementById('cpuTempValue').textContent = fmtTemp(stats.cpu_temp_c);
-            document.getElementById('gpuTempValue').textContent = fmtTemp(stats.gpu_temp_c);
-            document.getElementById('npuTempValue').textContent = fmtTemp(stats.npu_temp_c);
+            document.getElementById('ramUsage').innerHTML = `${ramUsed.toFixed(1)}<span class="stat-value-denominator">/${ramTotal.toFixed(1)} GB</span>`;
+            const ramBar = document.getElementById('ramBar');
+            ramBar.style.width = `${ramPercent}%`;
+            ramBar.style.background = '#FF9800';  // Orange
 
             // Sparklines
             if (stats.history) {
                 const canvases = {
+                    gpu: document.getElementById('gpuUtilSparkline'),
+                    vram: document.getElementById('vramSparkline'),
                     cpu: document.getElementById('cpuSparkline'),
-                    ram: document.getElementById('ramSparkline'),
-                    thermal: document.getElementById('thermalChart')
+                    ram: document.getElementById('ramSparkline')
                 };
 
                 // Set canvas dimensions (use offsetWidth with fallback to parent width)
@@ -4082,25 +3964,11 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
                     }
                 });
 
+                drawSparkline(canvases.gpu, stats.history.gpu_util, '#4CAF50');  // Green
+                drawSparkline(canvases.vram, stats.history.vram_used, '#9C27B0'); // Purple
                 drawSparkline(canvases.cpu, stats.history.cpu_util, '#2196F3');   // Blue
                 drawSparkline(canvases.ram, stats.history.ram_used, '#FF9800');   // Orange
-
-                drawMultiSparkline(canvases.thermal, [
-                    { data: stats.history.cpu_temp, color: '#2196F3' },
-                    { data: stats.history.gpu_temp, color: '#FF9800' },
-                    { data: stats.history.npu_temp, color: '#9C27B0' },
-                ]);
             }
-        }
-
-        // Set a circular ring gauge's fill amount (0-100%) via stroke-dashoffset
-        function setRingProgress(elementId, percent, circumference) {
-            const ring = document.getElementById(elementId);
-            if (!ring) return;
-            const clamped = Math.max(0, Math.min(100, percent || 0));
-            const offset = circumference * (1 - clamped / 100);
-            ring.style.strokeDashoffset = offset;
-            ring.classList.toggle('high', clamped >= 85);
         }
 
         // Periodic check for pending GPU stats updates

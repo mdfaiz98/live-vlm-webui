@@ -22,6 +22,7 @@ import logging
 import os
 import platform
 import psutil
+import re
 import socket
 import subprocess
 from abc import ABC, abstractmethod
@@ -101,6 +102,203 @@ def get_cpu_model() -> str:
     except Exception as e:
         logger.warning(f"Failed to get CPU model: {e}")
         return "Unknown CPU"
+
+
+def get_thermal_stats() -> Dict[str, Optional[float]]:
+    """
+    Read CPU / iGPU / NPU temperatures from Linux thermal zones
+    (/sys/class/thermal/thermal_zone*/{type,temp}).
+
+    This is generic Linux sysfs, not vendor-specific - on Qualcomm Snapdragon/
+    Dragonwing boards (e.g. QCS9075M) the zone names typically look like:
+        cpu-*-thermal    -> CPU cores
+        gpuss-*-thermal  -> Adreno GPU
+        nsp-*-thermal    -> Hexagon NPU ("NSP" = Neural Signal Processor)
+
+    Each group is averaged across however many zones match. Returns None for
+    any group with no matching zones (e.g. non-Linux, or a board that doesn't
+    expose these particular zone names) so callers can show "N/A" gracefully.
+    """
+    result: Dict[str, Optional[float]] = {
+        "cpu_temp_c": None,
+        "gpu_temp_c": None,
+        "npu_temp_c": None,
+    }
+
+    thermal_root = "/sys/class/thermal"
+    if not os.path.isdir(thermal_root):
+        return result
+
+    groups: Dict[str, List[float]] = {"cpu_temp_c": [], "gpu_temp_c": [], "npu_temp_c": []}
+
+    try:
+        for entry in os.listdir(thermal_root):
+            if not entry.startswith("thermal_zone"):
+                continue
+            zone_dir = os.path.join(thermal_root, entry)
+            try:
+                with open(os.path.join(zone_dir, "type"), "r") as f:
+                    zone_type = f.read().strip().lower()
+                with open(os.path.join(zone_dir, "temp"), "r") as f:
+                    # Linux reports thermal zone temps in millidegrees C
+                    milli_c = float(f.read().strip())
+                temp_c = milli_c / 1000.0
+            except Exception:
+                continue
+
+            if zone_type.startswith("cpu-"):
+                groups["cpu_temp_c"].append(temp_c)
+            elif zone_type.startswith("gpuss-") or zone_type.startswith("gpu-"):
+                groups["gpu_temp_c"].append(temp_c)
+            elif zone_type.startswith("nsp-"):
+                groups["npu_temp_c"].append(temp_c)
+    except Exception as e:
+        logger.debug(f"Error reading thermal zones: {e}")
+        return result
+
+    for key, values in groups.items():
+        if values:
+            result[key] = round(sum(values) / len(values), 1)
+
+    return result
+
+
+def get_qualcomm_soc_info() -> Dict[str, Optional[str]]:
+    """
+    Identify the Qualcomm SoC/board and OS on Snapdragon/Dragonwing Linux
+    boards (e.g. QCS9075M / IQ-9075 EVK, AIR-055) for display in the system
+    info header.
+
+    Uses distinct "qc_"-prefixed keys (rather than reusing generic keys like
+    "gpu_name"/"board_name") so this is always safe to merge into any
+    monitor's stats dict without risk of a None value here overwriting a
+    real value set by an NVIDIA/Jetson/Mac monitor elsewhere - on those
+    platforms every value here is simply None/absent.
+
+    GPU (Adreno) and NPU (Hexagon) model names aren't exposed via any public
+    sysfs path on this hardware, so for known SoC families they're reported
+    from Qualcomm's own published spec for that chip family, not queried live.
+    """
+    result: Dict[str, Optional[str]] = {
+        "qc_board_name": None,
+        "qc_soc_name": None,
+        "qc_cpu_model": None,
+        "qc_gpu_name": None,
+        "qc_npu_name": None,
+        "os_pretty": None,
+        "kernel_version": None,
+    }
+
+    # --- Board / SoC identification via device-tree ---
+    compatible_entries: List[str] = []
+    try:
+        with open("/proc/device-tree/compatible", "rb") as f:
+            raw = f.read()
+        compatible_entries = [e.decode("utf-8", errors="ignore") for e in raw.split(b"\x00") if e]
+    except FileNotFoundError:
+        return result  # not a device-tree Linux board (e.g. x86 NVIDIA/AMD) - nothing to report
+    except Exception as e:
+        logger.debug(f"Could not read device-tree compatible: {e}")
+        return result
+
+    qcom_entries = [e for e in compatible_entries if e.lower().startswith("qcom,")]
+    if not qcom_entries:
+        return result  # not a Qualcomm board
+
+    # Prefer the OEM-provided board model string when available, reformatted to a
+    # short display name (e.g. "Advantech Technologies, Inc. Addons AIR055 A1"
+    # -> "Advantech AIR-055") - falls back to the raw string if it doesn't match
+    # the expected pattern, so this still works if a different Advantech board
+    # ever runs this code.
+    try:
+        with open("/proc/device-tree/model", "rb") as f:
+            model = f.read().split(b"\x00")[0].decode("utf-8", errors="ignore").strip()
+        if model:
+            m = re.search(r"\bAIR\s*-?\s*(\d+)\b", model, re.IGNORECASE)
+            if "advantech" in model.lower() and m:
+                result["qc_board_name"] = f"Advantech AIR-{m.group(1)}"
+            else:
+                result["qc_board_name"] = model
+    except Exception as e:
+        logger.debug(f"Could not read device-tree model: {e}")
+
+    if not result["qc_board_name"]:
+        # Fall back to the most specific device-tree compatible entry (device-tree
+        # lists most-specific compatible string first)
+        most_specific = qcom_entries[0].split(",", 1)[1]
+        result["qc_board_name"] = f"Qualcomm {most_specific.upper()}"
+
+    # SoC name: Qualcomm markets the QCS9075/SA8775P family under the Dragonwing
+    # "IQ-9" product line, which is the name Advantech's own materials use too -
+    # shown here instead of the raw internal chip number.
+    soc_family_display_name = {
+        "qcs9075": "IQ9",
+        "sa8775p": "IQ9",
+    }
+    for entry in qcom_entries:
+        key = entry.split(",", 1)[1].lower()
+        for family, display in soc_family_display_name.items():
+            if key.startswith(family):
+                result["qc_soc_name"] = display
+                break
+        if result["qc_soc_name"]:
+            break
+
+    # Known SoC family -> GPU/NPU, from Qualcomm's published spec for that chip
+    # family (not independently queryable via sysfs on this hardware).
+    soc_family_gfx = {
+        "sa8775p": ("Adreno 663 GPU", "Hexagon NPU"),
+        "qcs9075": ("Adreno 663 GPU", "Hexagon NPU"),
+    }
+    for entry in qcom_entries:
+        key = entry.split(",", 1)[1].lower()
+        for family, (gpu, npu) in soc_family_gfx.items():
+            if key.startswith(family):
+                result["qc_gpu_name"] = gpu
+                result["qc_npu_name"] = npu
+                break
+        if result["qc_gpu_name"]:
+            break
+
+    # --- CPU core identification via ARM MIDR part number ---
+    # (Qualcomm's own marketing name for the specific Kryo core isn't
+    # queryable here, so this reports the underlying ARM core design, which
+    # is a verifiable fact rather than a guessed marketing number.)
+    arm_part_names = {
+        "0xd4b": "ARM Cortex-A78C",
+        "0xd41": "ARM Cortex-A78",
+        "0xd44": "ARM Cortex-X1",
+        "0xd05": "ARM Cortex-A55",
+        "0xd46": "ARM Cortex-A510",
+        "0xd47": "ARM Cortex-A710",
+        "0xd48": "ARM Cortex-X2",
+    }
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            for line in f:
+                if line.lower().startswith("cpu part"):
+                    part = line.split(":")[-1].strip().lower()
+                    result["qc_cpu_model"] = arm_part_names.get(part, f"ARM core ({part})")
+                    break
+    except Exception as e:
+        logger.debug(f"Could not read /proc/cpuinfo for CPU part: {e}")
+
+    # --- OS / kernel ---
+    try:
+        with open("/etc/os-release", "r") as f:
+            for line in f:
+                if line.startswith("PRETTY_NAME="):
+                    result["os_pretty"] = line.split("=", 1)[1].strip().strip('"')
+                    break
+    except Exception as e:
+        logger.debug(f"Could not read /etc/os-release: {e}")
+
+    try:
+        result["kernel_version"] = platform.release()
+    except Exception as e:
+        logger.debug(f"Could not read kernel version: {e}")
+
+    return result
 
 
 def get_system_product_info() -> Dict[str, Optional[str]]:
@@ -239,6 +437,9 @@ class GPUMonitor(ABC):
         self.vram_used_history = deque(maxlen=history_size)
         self.cpu_util_history = deque(maxlen=history_size)
         self.ram_used_history = deque(maxlen=history_size)
+        self.cpu_temp_history = deque(maxlen=history_size)
+        self.gpu_temp_history = deque(maxlen=history_size)
+        self.npu_temp_history = deque(maxlen=history_size)
 
     @abstractmethod
     def get_stats(self) -> Dict:
@@ -251,7 +452,8 @@ class GPUMonitor(ABC):
         pass
 
     def get_cpu_ram_stats(self) -> Dict:
-        """Get CPU and RAM stats (common across all platforms)"""
+        """Get CPU and RAM stats (common across all platforms), plus thermal
+        zone temps where available (Linux only; None elsewhere)"""
         try:
             # Use interval=None for non-blocking call
             # First call returns 0.0, subsequent calls return percentage since last call
@@ -259,6 +461,8 @@ class GPUMonitor(ABC):
             memory = psutil.virtual_memory()
             hostname = socket.gethostname()
             cpu_model = get_cpu_model()
+            thermal = get_thermal_stats()
+            qc_info = get_qualcomm_soc_info()
 
             return {
                 "cpu_percent": cpu_percent,
@@ -267,6 +471,8 @@ class GPUMonitor(ABC):
                 "ram_total_gb": memory.total / (1024**3),
                 "ram_percent": memory.percent,
                 "hostname": hostname,
+                **thermal,
+                **qc_info,
             }
         except Exception as e:
             logger.error(f"Error getting CPU/RAM stats: {e}")
@@ -277,6 +483,16 @@ class GPUMonitor(ABC):
                 "ram_total_gb": 0,
                 "ram_percent": 0,
                 "hostname": "Unknown",
+                "cpu_temp_c": None,
+                "gpu_temp_c": None,
+                "npu_temp_c": None,
+                "qc_board_name": None,
+                "qc_soc_name": None,
+                "qc_cpu_model": None,
+                "qc_gpu_name": None,
+                "qc_npu_name": None,
+                "os_pretty": None,
+                "kernel_version": None,
             }
 
     def update_history(self, stats: Dict):
@@ -285,6 +501,9 @@ class GPUMonitor(ABC):
         self.vram_used_history.append(stats.get("vram_used_gb", 0))
         self.cpu_util_history.append(stats.get("cpu_percent", 0))
         self.ram_used_history.append(stats.get("ram_used_gb", 0))
+        self.cpu_temp_history.append(stats.get("cpu_temp_c"))
+        self.gpu_temp_history.append(stats.get("gpu_temp_c"))
+        self.npu_temp_history.append(stats.get("npu_temp_c"))
 
     def get_history(self) -> Dict[str, List[float]]:
         """Get historical data as lists"""
@@ -293,6 +512,9 @@ class GPUMonitor(ABC):
             "vram_used": list(self.vram_used_history),
             "cpu_util": list(self.cpu_util_history),
             "ram_used": list(self.ram_used_history),
+            "cpu_temp": list(self.cpu_temp_history),
+            "gpu_temp": list(self.gpu_temp_history),
+            "npu_temp": list(self.npu_temp_history),
         }
 
 
