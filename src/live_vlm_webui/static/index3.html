@@ -2060,10 +2060,10 @@ limitations under the License.
     </svg>
 
     <!-- Lucide Icons - Load before body scripts -->
-    <script src="/vendor/lucide.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Markdown rendering libraries -->
-    <script src="/vendor/marked.min.js"></script>
-    <script src="/vendor/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <script>
         // Initialize Lucide icons immediately when DOM is ready
         if (document.readyState === 'loading') {
@@ -4332,12 +4332,8 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
 
                 updateStatus('Connecting...', 'processing');
 
-                // No STUN/TURN server needed - browser and server are on the same
-                // machine (localhost), so host candidates alone are sufficient.
-                // A public STUN server here would make the webcam feed silently
-                // depend on internet access for no reason.
                 peerConnection = new RTCPeerConnection({
-                    iceServers: []
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
                 });
 
                 localStream.getTracks().forEach(track => {
@@ -4415,9 +4411,8 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
                 updateStatus('Connecting to RTSP stream...', 'processing');
 
                 // Create WebRTC peer connection (no local stream needed for RTSP)
-                // No STUN/TURN needed here either - same-machine connection only.
                 peerConnection = new RTCPeerConnection({
-                    iceServers: []
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
                 });
 
                 // Receive processed video from server

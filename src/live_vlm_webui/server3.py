@@ -583,11 +583,13 @@ async def offer(request):
     session_vlm = session["vlm_service"]
     session_callback = get_session_callback(session_id)
 
-    # No STUN servers - this connection is always browser-to-same-machine (or
-    # same-LAN), so host ICE candidates alone are sufficient. Public STUN
-    # servers here would make the video feed depend on internet access for
-    # no reason and break fully-offline operation.
-    config = RTCConfiguration(iceServers=[])
+    # Create RTCPeerConnection with STUN servers for Docker/NAT compatibility
+    config = RTCConfiguration(
+        iceServers=[
+            RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+            RTCIceServer(urls=["stun:stun1.l.google.com:19302"]),
+        ]
+    )
     pc = RTCPeerConnection(configuration=config)
     pcs.add(pc)
 
@@ -952,19 +954,6 @@ async def create_app(test_mode=False):
         logger.info(f"Serving static files from: {images_dir}")
     else:
         logger.warning(f"⚠️  Static images directory not found: {images_dir}")
-
-    # Serve self-hosted third-party JS libraries (lucide, marked, dompurify) -
-    # previously loaded from unpkg.com/cdn.jsdelivr.net, which made the page
-    # fail to fully initialize with no internet access (icons, markdown
-    # rendering, and everything scripted after those tags in page order).
-    vendor_dir = os.path.join(os.path.dirname(__file__), "static", "vendor")
-    vendor_dir = os.path.abspath(vendor_dir)
-
-    if os.path.exists(vendor_dir):
-        app.router.add_static("/vendor", vendor_dir, name="vendor")
-        logger.info(f"Serving vendored JS libraries from: {vendor_dir}")
-    else:
-        logger.warning(f"⚠️  Vendor JS directory not found: {vendor_dir}")
 
     # Serve favicon files
     favicon_dir = os.path.join(os.path.dirname(__file__), "static", "favicon")
