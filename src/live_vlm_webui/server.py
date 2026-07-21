@@ -232,7 +232,26 @@ async def index(request):
             f'id="apiBaseUrl" value="{configured_api_base}"',
         )
 
-    return web.Response(content_type="text/html", text=content)
+    return web.Response(content_type="text/html", text=content, headers={"Cache-Control": "no-store"})
+
+
+async def app_style(request):
+    """Serve the extracted stylesheet (was previously inlined in index.html).
+
+    Read fresh + no-store on every request, same as index() - this is an
+    actively-edited demo, not a CDN asset, and browser caching here has
+    previously made in-progress style/script edits look like they hadn't
+    taken effect after a normal refresh."""
+    path = os.path.join(os.path.dirname(__file__), "static", "style.css")
+    content = open(path, "r").read()
+    return web.Response(content_type="text/css", text=content, headers={"Cache-Control": "no-store"})
+
+
+async def app_script(request):
+    """Serve the extracted app JS (was previously inlined in index.html). See app_style() re: no-store."""
+    path = os.path.join(os.path.dirname(__file__), "static", "app.js")
+    content = open(path, "r").read()
+    return web.Response(content_type="text/javascript", text=content, headers={"Cache-Control": "no-store"})
 
 
 async def models(request):
@@ -1052,6 +1071,8 @@ async def create_app(test_mode=False):
     # Create web application
     app = web.Application()
     app.router.add_get("/", index)
+    app.router.add_get("/style.css", app_style)
+    app.router.add_get("/app.js", app_script)
     app.router.add_get("/models", models)
     app.router.add_get("/detect-services", detect_services)
     app.router.add_get("/ws", websocket_handler)
