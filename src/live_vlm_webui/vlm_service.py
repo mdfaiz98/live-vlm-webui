@@ -40,7 +40,7 @@ class VLMService:
         api_base: str = "http://localhost:8000/v1",
         api_key: str = "EMPTY",
         prompt: str = "Describe what you see in this image in one sentence.",
-        max_tokens: int = 512,
+        max_tokens: int = 256,
     ):
         """
         Initialize VLM service
@@ -57,9 +57,27 @@ class VLMService:
         self.api_key = api_key if api_key else "EMPTY"
         self.prompt = prompt
         self.max_tokens = max_tokens
-        self.client = AsyncOpenAI(base_url=api_base, api_key=api_key)
+        # Timeout bounds how long we'll wait on any single inference call.
+        # Normal responses run ~2-4s; this is generous enough for longer
+        # prompts (e.g. detailed object detection) to complete normally,
+        # but short enough that an anomalous multi-minute stall (seen
+        # occasionally with GenieX under sustained load) fails fast and
+        # releases the processing lock instead of freezing the response
+        # panel for minutes at a time.
+        self.request_timeout_seconds = 25.0
+        self.client = AsyncOpenAI(
+            base_url=api_base, api_key=api_key, timeout=self.request_timeout_seconds
+        )
         self.current_response = "Initializing..."
         self.is_processing = False
+        # After any failed/timed-out call, GenieX may still be processing the
+        # abandoned request in the background (it has no way to know the
+        # client gave up). Firing a new request immediately just queues up
+        # behind it, and repeating that every frame snowballs into a growing
+        # backlog. This cooldown prevents new attempts for a while after a
+        # failure, giving GenieX room to actually finish and recover.
+        self._last_failure_at: Optional[float] = None
+        self._failure_cooldown_seconds = 40.0
         self._processing_lock = asyncio.Lock()
         self._last_request_payload = None  # For debug: request body (image truncated)
         self._last_response_payload = None  # For debug: API response body
@@ -165,10 +183,12 @@ class VLMService:
 
             result = response.choices[0].message.content.strip()
             logger.info(f"VLM response: {result} (latency: {inference_time*1000:.0f}ms)")
+            self._last_failure_at = None  # Clear cooldown - server has recovered
             return result
 
         except Exception as e:
             logger.error(f"Error analyzing image: {e}")
+            self._last_failure_at = time.time()
             return f"Error: {str(e)}"
 
     def get_last_request_payload(self) -> Optional[dict]:
@@ -198,6 +218,18 @@ class VLMService:
         if self._processing_lock.locked():
             logger.debug("VLM busy, skipping frame")
             return
+
+        # After a recent failure/timeout, GenieX may still be working through
+        # the abandoned request - wait out the cooldown before trying again
+        # rather than piling another request on top of it.
+        if self._last_failure_at is not None:
+            elapsed_since_failure = time.time() - self._last_failure_at
+            if elapsed_since_failure < self._failure_cooldown_seconds:
+                logger.debug(
+                    f"In cooldown after recent failure "
+                    f"({elapsed_since_failure:.0f}s / {self._failure_cooldown_seconds:.0f}s), skipping frame"
+                )
+                return
 
         async with self._processing_lock:
             self.is_processing = True
@@ -265,7 +297,9 @@ class VLMService:
             self.api_key = api_key if api_key else "EMPTY"
 
         # Recreate the client with new settings
-        self.client = AsyncOpenAI(base_url=self.api_base, api_key=self.api_key)
+        self.client = AsyncOpenAI(
+            base_url=self.api_base, api_key=self.api_key, timeout=self.request_timeout_seconds
+        )
 
         masked_key = (
             "***" + self.api_key[-4:]

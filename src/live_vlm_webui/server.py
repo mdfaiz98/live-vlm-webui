@@ -43,6 +43,7 @@ from .vlm_service import VLMService
 from .video_processor import VideoProcessorTrack
 from .gpu_monitor import create_monitor
 from .rtsp_track import RTSPVideoTrack
+from .video_file_track import VideoFileTrack
 
 # Configure logging
 logging.basicConfig(
@@ -577,6 +578,7 @@ async def offer(request):
     params = await request.json()
     offer_sdp = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
     rtsp_url = params.get("rtsp_url")  # Optional RTSP URL for IP camera mode
+    video_file_path = params.get("video_file_path")  # Optional local video file mode
     session_id = params.get("session_id", "default")
 
     session = get_or_create_session(session_id)
@@ -642,6 +644,36 @@ async def offer(request):
                 status=500,
                 content_type="application/json",
                 text=json.dumps({"error": f"Failed to connect to RTSP stream: {str(e)}"}),
+            )
+    elif video_file_path:
+        logger.info(f"[{session_id}] Creating video file track for: {video_file_path}")
+
+        if not os.path.isfile(video_file_path):
+            return web.Response(
+                status=400,
+                content_type="application/json",
+                text=json.dumps({"error": f"Video file not found: {video_file_path}"}),
+            )
+
+        try:
+            video_track = VideoFileTrack(video_file_path, loop=True)
+            rtsp_cleanup_track = video_track  # Same cleanup path as RTSP - just needs .stop()
+
+            relayed_video = relay.subscribe(video_track)
+
+            processor_track = VideoProcessorTrack(
+                relayed_video, session_vlm, text_callback=session_callback
+            )
+
+            pc.addTrack(processor_track)
+            logger.info("Added video file processor track to peer connection")
+
+        except Exception as e:
+            logger.error(f"Failed to create video file track: {e}")
+            return web.Response(
+                status=500,
+                content_type="application/json",
+                text=json.dumps({"error": f"Failed to open video file: {str(e)}"}),
             )
     else:
         # Webcam mode: wait for browser to send track
@@ -830,6 +862,94 @@ async def rtsp_status(request):
         )
 
 
+# Directory where uploaded video files are stored - lives outside the git
+# repo/package (in the user's cache dir) since uploaded content shouldn't be
+# committed or bundled with the app
+VIDEO_UPLOAD_DIR = os.path.join(os.path.expanduser("~"), ".cache", "live_vlm_webui", "uploaded_videos")
+
+# Video files are typically much larger than the JSON/SDP bodies this server
+# otherwise handles - cap uploads at 2GB to avoid accidentally filling disk
+MAX_VIDEO_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
+
+ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
+
+
+async def upload_video_file(request):
+    """
+    Accept a video file upload (multipart/form-data) and save it to disk so
+    a VideoFileTrack can open it. Returns the saved path for use as
+    video_file_path in a subsequent /offer request.
+
+    POST /api/video/upload
+    """
+    try:
+        os.makedirs(VIDEO_UPLOAD_DIR, exist_ok=True)
+
+        reader = await request.multipart()
+        field = await reader.next()
+
+        if field is None or field.name != "file":
+            return web.Response(
+                status=400,
+                content_type="application/json",
+                text=json.dumps({"error": "Expected a multipart field named 'file'"}),
+            )
+
+        original_name = field.filename or "upload"
+        ext = os.path.splitext(original_name)[1].lower()
+        if ext not in ALLOWED_VIDEO_EXTENSIONS:
+            return web.Response(
+                status=400,
+                content_type="application/json",
+                text=json.dumps(
+                    {
+                        "error": f"Unsupported file type '{ext}'. Allowed: "
+                        f"{', '.join(sorted(ALLOWED_VIDEO_EXTENSIONS))}"
+                    }
+                ),
+            )
+
+        # Unique filename so concurrent/repeated uploads never collide
+        saved_name = f"{uuid.uuid4().hex}{ext}"
+        saved_path = os.path.join(VIDEO_UPLOAD_DIR, saved_name)
+
+        bytes_written = 0
+        with open(saved_path, "wb") as f:
+            while True:
+                chunk = await field.read_chunk(size=1024 * 1024)
+                if not chunk:
+                    break
+                bytes_written += len(chunk)
+                if bytes_written > MAX_VIDEO_UPLOAD_BYTES:
+                    f.close()
+                    os.remove(saved_path)
+                    return web.Response(
+                        status=413,
+                        content_type="application/json",
+                        text=json.dumps({"error": "File too large (max 2GB)"}),
+                    )
+                f.write(chunk)
+
+        logger.info(f"Video file uploaded: {saved_path} ({bytes_written} bytes)")
+
+        return web.Response(
+            content_type="application/json",
+            text=json.dumps(
+                {
+                    "video_file_path": saved_path,
+                    "original_filename": original_name,
+                    "size_bytes": bytes_written,
+                }
+            ),
+        )
+
+    except Exception as e:
+        logger.error(f"Error uploading video file: {e}", exc_info=True)
+        return web.Response(
+            status=500, content_type="application/json", text=json.dumps({"error": str(e)})
+        )
+
+
 async def _stop_rtsp_session(session_id: str):
     """Helper function to stop an RTSP session"""
     if session_id in rtsp_tracks:
@@ -941,6 +1061,9 @@ async def create_app(test_mode=False):
     app.router.add_post("/api/rtsp/start", rtsp_start)
     app.router.add_post("/api/rtsp/stop", rtsp_stop)
     app.router.add_get("/api/rtsp/status", rtsp_status)
+
+    # Video file upload endpoint
+    app.router.add_post("/api/video/upload", upload_video_file)
 
     # Serve static files (images, etc.)
     # Always serve from static/images within the package (works for both pip and dev installs)
