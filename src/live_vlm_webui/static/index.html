@@ -410,14 +410,25 @@ limitations under the License.
                         <label>Quick Presets</label>
                         <select id="promptPreset">
                             <option value="">-- Select a preset --</option>
-                            <option value="Describe what you see in this image in one sentence.">Scene Description</option>
-                            <option value="List all objects you can see in this image, separated by commas.">Object Detection</option>
-                            <option value="Describe the person's activity and what they are doing.">Activity Recognition</option>
-                            <option value="Are there any safety hazards visible? Answer with 'ALERT: description' or 'SAFE'.">Safety Monitoring</option>
-                            <option value="Describe the facial expressions and emotions of people visible.">Emotion Detection</option>
-                            <option value="Provide a detailed description of the scene for a visually impaired person.">Accessibility</option>
-                            <option value="Read and transcribe any text visible in the image.">OCR / Text Reading</option>
-                            <option value="Answer with Yes or No only: Is there a person visible?">Yes/No Question</option>
+                            <optgroup label="Scene Understanding">
+                                <option value="Describe what you see in this image in one sentence.">🖼️ Scene Description</option>
+                                <option value="List up to 5 main objects you see in this image, separated by commas. No descriptions, just names.">📦 Object Detection</option>
+                                <option value="Describe the person's activity and what they are doing. Answer in 1-2 sentences.">🏃 Activity Recognition</option>
+                                <option value="Describe the facial expressions and emotions of people visible. Answer in 1-2 sentences.">🙂 Emotion Detection</option>
+                                <option value="Describe the scene for a visually impaired person, focusing on the most important details. Answer in 1-2 sentences.">🦯 Accessibility</option>
+                                <option value="Read and transcribe any text visible in the image.">🔤 OCR / Text Reading</option>
+                                <option value="Answer with Yes or No only: Is there a person visible?">✅ Yes/No Question</option>
+                            </optgroup>
+                            <optgroup label="Monitoring Use Cases">
+                                <option value="Are there any safety hazards visible? Answer with 'ALERT: description' or 'SAFE'.">⚠️ Safety Monitoring</option>
+                                <option value="Is anyone in the water showing signs of distress, unresponsive, or submerged and not moving? Answer in 1-2 sentences.">🏊 Pool Safety (Drowning Detection)</option>
+                                <option value="Has anyone fallen or is lying on the floor abnormally? Answer in 1-2 sentences.">🧓 Elder Care (Fall Detection)</option>
+                                <option value="Describe any people, vehicles, or unusual/suspicious activity visible. Answer in 1-2 sentences.">🔒 Security Monitoring</option>
+                                <option value="Describe customer traffic and any safety concerns visible. Answer in 1-2 sentences.">🛒 Retail Monitoring</option>
+                                <option value="Are workers wearing required safety equipment and staying out of restricted areas? Answer in 1-2 sentences.">🦺 Warehouse Safety</option>
+                                <option value="Is anyone visibly using a cell phone, and if so what are they doing with it (texting, calling, scrolling)? Answer in 1-2 sentences.">📱 Cell Phone Usage Monitoring</option>
+                            </optgroup>
+                            <optgroup label="Robot Navigation">
                             <option value="You are a robot. Describe what you see, then give 5 navigation commands to get to a possible location of a bathroom. Format: 'linear_x=0.3, angular_z=0.0 # reason'. Keep linear_x between -0.5 and 0.5, angular_z between -1.0 and 1.0.">🤖 Robot Navigation (Simple)</option>
                             <option value="You are controlling a mobile robot with differential drive. Camera: 1.0m height, forward-facing. Generate ROS cmd_vel commands based on what you see to get to a possible location of a bathroom.
 
@@ -433,6 +444,7 @@ T=0.1s: linear.x=0.18, angular.z=-0.15 # [explain decision based on scene]
 
 STRATEGY SECTION:
 After commands, explain: obstacles detected, clearance margins, goal inference, safety considerations.">🤖 Robot Navigation (ROS)</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div class="form-group">

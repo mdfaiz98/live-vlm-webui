@@ -32,20 +32,28 @@ limitations under the License.
             --border-subtle: #1A1D1A;
             --card-bg: #0D0F0D;
             --card-hover: #171C17;
-            /* Single considered accent - phosphor green readout, not an AI blue/purple gradient */
-            --accent-color: #35E28A;
-            --accent-hover: #22B96C;
+            /* Single considered accent - muted slate/graphite with a faint blue-steel tint.
+               Deliberately near-neutral and low-chroma so it never competes with the thermal
+               chart's blue/orange/violet or reads as "poppy" - an instrument-panel accent,
+               not a brand-color statement. */
+            --accent-color: #5B6B72;
+            --accent-hover: #465158;
+            --accent-rgb: 91, 107, 114;
             --accent-color-2: #E8A93D;
-            --accent-soft: rgba(53, 226, 138, 0.14);
-            --accent-border-soft: rgba(53, 226, 138, 0.35);
-            --success-color: #35E28A;
+            --accent-soft: rgba(91, 107, 114, 0.16);
+            --accent-border-soft: rgba(91, 107, 114, 0.4);
+            --success-color: #5B6B72;
             --warning-color: #E8A93D;
             --error-color: #F0475A;
             --error-color-2: #A82236;
             --error-border-soft: rgba(240, 71, 90, 0.4);
-            --thermal-cpu: #4CC2F0;
+            /* CPU ring gauge - deliberately its own token, not tied to --accent-color, so
+               retuning the general UI accent (buttons/borders/live-badge) never drags the
+               ring's color along with it. Restored to the original phosphor-green readout. */
+            --ring-cpu-color: #35E28A;
+            --thermal-cpu: #22C55E;
             --thermal-igpu: #F0925A;
-            --thermal-npu: #E85FB0;
+            --thermal-npu: #D946EF;
             /* Hard, tinted, "engraved panel" shadows - no soft AI-card blur */
             --card-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 8px 20px rgba(0, 0, 0, 0.4);
             --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.035);
@@ -103,19 +111,21 @@ limitations under the License.
             --border-subtle: #DBDACE;
             --card-bg: #FAF9F5;
             --card-hover: #EFEEE6;
-            --accent-color: #0E8A50;
-            --accent-hover: #0A6E3E;
+            --accent-color: #3E4A50;
+            --accent-hover: #2C363B;
+            --accent-rgb: 62, 74, 80;
             --accent-color-2: #B4780E;
-            --accent-soft: rgba(14, 138, 80, 0.1);
-            --accent-border-soft: rgba(14, 138, 80, 0.28);
-            --success-color: #0E8A50;
+            --accent-soft: rgba(62, 74, 80, 0.1);
+            --accent-border-soft: rgba(62, 74, 80, 0.3);
+            --success-color: #3E4A50;
             --warning-color: #B4780E;
             --error-color: #C22B3E;
             --error-color-2: #8A1B2B;
             --error-border-soft: rgba(194, 43, 62, 0.32);
-            --thermal-cpu: #0B72A8;
+            --ring-cpu-color: #0E8A50;
+            --thermal-cpu: #15803D;
             --thermal-igpu: #C15A1E;
-            --thermal-npu: #A32E82;
+            --thermal-npu: #8A1AA0;
             --card-shadow: 0 1px 0 rgba(18, 20, 15, 0.08), 0 4px 12px rgba(18, 20, 15, 0.06);
             --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.5);
             --modal-bg: rgba(250, 249, 245, 0.9);
@@ -743,7 +753,13 @@ limitations under the License.
         textarea {
             resize: vertical;
             min-height: 80px;
+            max-height: 260px;
+            overflow-y: auto;
             line-height: 1.5;
+        }
+
+        #promptText {
+            font-size: 14px;
         }
 
         .btn {
@@ -1587,8 +1603,8 @@ limitations under the License.
         }
 
         .copy-button-embedded.copied {
-            background: rgba(53, 226, 138, 0.55);
-            border-color: rgba(53, 226, 138, 0.5);
+            background: rgba(var(--accent-rgb), 0.55);
+            border-color: rgba(var(--accent-rgb), 0.5);
         }
 
         .copy-button-embedded.copied .lucide {
@@ -1773,15 +1789,15 @@ limitations under the License.
             0% {
                 transform: scale(0.95);
                 opacity: 0.8;
-                box-shadow: 0 0 0 0 rgba(53, 226, 138, 0.45);
+                box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.45);
             }
             50% {
-                box-shadow: 0 0 20px 4px rgba(53, 226, 138, 0.65);
+                box-shadow: 0 0 20px 4px rgba(var(--accent-rgb), 0.65);
             }
             100% {
                 transform: scale(1);
                 opacity: 1;
-                box-shadow: 0 0 0 0 rgba(53, 226, 138, 0);
+                box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0);
             }
         }
 
@@ -1908,7 +1924,7 @@ limitations under the License.
 
         .ring-fill {
             fill: none;
-            stroke: var(--accent-color);
+            stroke: var(--ring-cpu-color);
             stroke-width: 8;
             stroke-linecap: butt;
             transition: stroke-dashoffset 0.3s ease;
@@ -2230,16 +2246,16 @@ limitations under the License.
         /* Bright flash animation when applied (on blur) */
         @keyframes settingApplied {
             0% {
-                box-shadow: 0 0 0 0 rgba(53, 226, 138, 0.7),
-                           0 0 20px rgba(53, 226, 138, 0.8);
+                box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.7),
+                           0 0 20px rgba(var(--accent-rgb), 0.8);
             }
             50% {
-                box-shadow: 0 0 0 6px rgba(53, 226, 138, 0.3),
-                           0 0 30px rgba(53, 226, 138, 0.6);
+                box-shadow: 0 0 0 6px rgba(var(--accent-rgb), 0.3),
+                           0 0 30px rgba(var(--accent-rgb), 0.6);
             }
             100% {
-                box-shadow: 0 0 0 0 rgba(53, 226, 138, 0),
-                           0 0 0 rgba(53, 226, 138, 0);
+                box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0),
+                           0 0 0 rgba(var(--accent-rgb), 0);
             }
         }
 
