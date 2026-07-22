@@ -43,11 +43,11 @@ limitations under the License.
     <div class="header">
         <div class="header-left">
             <div class="logo" style="display: flex; align-items: center;">
-                <img src="/images/advantech-logo.png" alt="Advantech" style="height: 44px; width: auto; display: block;">
+                <img src="/images/advantech-logo.png" alt="Advantech" style="height: 70px; width: auto; display: block; margin: -13px 0;">
             </div>
             <div class="title-section">
-                <h1>Advantech Live VLM</h1>
-                <div class="subtitle">Real-time Vision Language Model Benchmark/Evaluation Tool</div>
+                <h1>Live VLM</h1>
+                <div class="subtitle">Real-time Vision Language Model Evaluation Tool</div>
             </div>
         </div>
         <div class="header-right">
@@ -249,7 +249,7 @@ limitations under the License.
                                 <button class="icon-btn" id="apiPresetsBtn" title="Select preset API endpoint">
                                     <i data-lucide="clipboard"></i>
                                 </button>
-                                <div id="apiPresetsMenu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 4px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 280px; z-index: 9999;">
+                                <div id="apiPresetsMenu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 4px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius-md); box-shadow: var(--card-shadow); min-width: 280px; z-index: 9999;">
                                     <div style="padding: 8px 0;">
                                         <div class="api-preset-item" data-url="http://localhost:11434/v1">
                                             <strong>Ollama</strong><br>
@@ -525,8 +525,8 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
                 <div class="result-prompt" id="currentPrompt"></div>
                 <div id="requestPayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
                     <details style="margin: 0;">
-                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);">Request payload (debug)</summary>
-                        <pre id="requestPayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
+                        <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary);">// Request payload (debug)</summary>
+                        <pre id="requestPayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
                     </details>
                 </div>
                 <div class="result-text" id="resultText">
@@ -541,8 +541,8 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
                 </div>
                 <div id="responsePayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
                     <details style="margin: 0;">
-                        <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary);">Response payload (debug)</summary>
-                        <pre id="responsePayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border-radius: 8px; font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
+                        <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary);">// Response payload (debug)</summary>
+                        <pre id="responsePayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
                     </details>
                 </div>
             </div>

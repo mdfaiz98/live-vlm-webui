@@ -20,36 +20,38 @@ limitations under the License.
             --advantech-navy-dark: #003366;
             --advantech-navy-light: #1A5A9E;
 
-            /* Dark theme (default) - true black, not tinted navy */
-            --bg-primary: #000000;
-            --bg-secondary: #0A0A0A;
-            --bg-tertiary: #141414;
-            --bg-elevated: #1C1C1C;
-            --text-primary: #F5F5F5;
-            --text-secondary: #A8A8A8;
-            --text-muted: #787878;
-            --border-color: #2A2A2A;
-            --border-subtle: #1C1C1C;
-            --card-bg: #0D0D0D;
-            --card-hover: #1A1A1A;
-            --accent-color: #22D3EE;
-            --accent-hover: #06B6D4;
-            --accent-color-2: #A78BFA;
-            --accent-soft: rgba(34, 211, 238, 0.16);
-            --accent-border-soft: rgba(34, 211, 238, 0.3);
-            --success-color: #2ED573;
-            --warning-color: #FBBF24;
-            --error-color: #F43F5E;
-            --error-color-2: #C81E45;
-            --error-border-soft: rgba(244, 63, 94, 0.45);
-            --thermal-cpu: #38BDF8;
-            --thermal-igpu: #FB923C;
-            --thermal-npu: #E879F9;
-            --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.5);
-            --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            /* Dark theme (default) - "deactivated CRT" panel, not true black */
+            --bg-primary: #0A0C0A;
+            --bg-secondary: #0F110F;
+            --bg-tertiary: #171A17;
+            --bg-elevated: #1E221E;
+            --text-primary: #E9EDE7;
+            --text-secondary: #93A092;
+            --text-muted: #5E685D;
+            --border-color: #262B26;
+            --border-subtle: #1A1D1A;
+            --card-bg: #0D0F0D;
+            --card-hover: #171C17;
+            /* Single considered accent - phosphor green readout, not an AI blue/purple gradient */
+            --accent-color: #35E28A;
+            --accent-hover: #22B96C;
+            --accent-color-2: #E8A93D;
+            --accent-soft: rgba(53, 226, 138, 0.14);
+            --accent-border-soft: rgba(53, 226, 138, 0.35);
+            --success-color: #35E28A;
+            --warning-color: #E8A93D;
+            --error-color: #F0475A;
+            --error-color-2: #A82236;
+            --error-border-soft: rgba(240, 71, 90, 0.4);
+            --thermal-cpu: #4CC2F0;
+            --thermal-igpu: #F0925A;
+            --thermal-npu: #E85FB0;
+            /* Hard, tinted, "engraved panel" shadows - no soft AI-card blur */
+            --card-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 8px 20px rgba(0, 0, 0, 0.4);
+            --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 
             /* Semi-transparent so backdrop-filter blur is actually visible behind the settings dialog */
-            --modal-bg: rgba(20, 20, 20, 0.85);
+            --modal-bg: rgba(13, 15, 13, 0.88);
 
             /* Type scale */
             --font-2xs: 11px;
@@ -62,6 +64,10 @@ limitations under the License.
             --font-2xl: 24px;
             --font-3xl: 28px;
             --tracking-label: 0.4px;
+
+            /* Font families - system stacks only (fully offline device, no webfont fetches) */
+            --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'JetBrains Mono', 'Roboto Mono', Consolas, 'Courier New', monospace;
 
             /* Spacing scale */
             --space-1: 4px;
@@ -76,43 +82,43 @@ limitations under the License.
             --space-8: 32px;
             --space-10: 40px;
 
-            /* Radius scale */
-            --radius-sm: 4px;
-            --radius-md: 8px;
-            --radius-lg: 12px;
-            --radius-xl: 16px;
-            --radius-full: 999px;
+            /* Radius scale - deliberately near-square. Instrument panels don't have rounded corners. */
+            --radius-sm: 2px;
+            --radius-md: 3px;
+            --radius-lg: 4px;
+            --radius-xl: 4px;
+            --radius-full: 3px;
         }
 
         body.light-theme {
-            /* Light theme */
-            --bg-primary: #F7F9FC;
-            --bg-secondary: #FFFFFF;
-            --bg-tertiary: #EDF1F9;
-            --bg-elevated: #FFFFFF;
-            --text-primary: #0A0F1E;
-            --text-secondary: #3D4A63;
-            --text-muted: #6B7A96;
-            --border-color: #D8E0EF;
-            --border-subtle: #E5EBF3;
-            --card-bg: #FFFFFF;
-            --card-hover: #EEF2FA;
-            --accent-color: #0891B2;
-            --accent-hover: #0E7490;
-            --accent-color-2: #7C3AED;
-            --accent-soft: rgba(8, 145, 178, 0.12);
-            --accent-border-soft: rgba(8, 145, 178, 0.24);
-            --success-color: #16A34A;
-            --warning-color: #D97706;
-            --error-color: #E11D48;
-            --error-color-2: #9F1239;
-            --error-border-soft: rgba(225, 29, 72, 0.35);
-            --thermal-cpu: #0284C7;
-            --thermal-igpu: #EA580C;
-            --thermal-npu: #C026D3;
-            --card-shadow: 0 2px 10px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
-            --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-            --modal-bg: rgba(255, 255, 255, 0.85);
+            /* Light theme - "Swiss industrial print": matte documentation paper, carbon ink, same single accent */
+            --bg-primary: #F1F0EA;
+            --bg-secondary: #FAF9F5;
+            --bg-tertiary: #E7E5DC;
+            --bg-elevated: #FAF9F5;
+            --text-primary: #12140F;
+            --text-secondary: #4B5347;
+            --text-muted: #757F6F;
+            --border-color: #CBCABE;
+            --border-subtle: #DBDACE;
+            --card-bg: #FAF9F5;
+            --card-hover: #EFEEE6;
+            --accent-color: #0E8A50;
+            --accent-hover: #0A6E3E;
+            --accent-color-2: #B4780E;
+            --accent-soft: rgba(14, 138, 80, 0.1);
+            --accent-border-soft: rgba(14, 138, 80, 0.28);
+            --success-color: #0E8A50;
+            --warning-color: #B4780E;
+            --error-color: #C22B3E;
+            --error-color-2: #8A1B2B;
+            --error-border-soft: rgba(194, 43, 62, 0.32);
+            --thermal-cpu: #0B72A8;
+            --thermal-igpu: #C15A1E;
+            --thermal-npu: #A32E82;
+            --card-shadow: 0 1px 0 rgba(18, 20, 15, 0.08), 0 4px 12px rgba(18, 20, 15, 0.06);
+            --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+            --modal-bg: rgba(250, 249, 245, 0.9);
         }
 
         * {
@@ -122,11 +128,33 @@ limitations under the License.
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            font-family: var(--font-display);
             background: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
             transition: background 0.3s ease, color 0.3s ease;
+            position: relative;
+        }
+
+        /* CRT texture: faint scanlines + vignette. Static (no animation), pointer-events:none,
+           sits above content but below the settings modal / fullscreen video. */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 5000;
+            pointer-events: none;
+            background:
+                repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.14) 0px, rgba(0, 0, 0, 0.14) 1px, transparent 1px, transparent 3px),
+                radial-gradient(ellipse at 50% 40%, transparent 55%, rgba(0, 0, 0, 0.4) 145%);
+            mix-blend-mode: multiply;
+            opacity: 0.4;
+        }
+
+        body.light-theme::before {
+            background: radial-gradient(ellipse at 50% 40%, transparent 60%, rgba(18, 20, 15, 0.06) 145%);
+            opacity: 1;
+            mix-blend-mode: multiply;
         }
 
         /* Code styling for hostname */
@@ -135,7 +163,7 @@ limitations under the License.
             border: 1px solid var(--border-color);
             padding: 2px 2px;
             border-radius: var(--radius-md);
-            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-family: var(--font-mono);
             font-size: 0.8em;
             color: var(--accent-color);
             white-space: nowrap;
@@ -144,6 +172,9 @@ limitations under the License.
         /* Header */
         .header {
             background: var(--advantech-navy);
+            background-image:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%),
+                repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0px, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 40px);
             padding: var(--space-3-5) var(--space-8);
             display: flex;
             justify-content: space-between;
@@ -161,7 +192,7 @@ limitations under the License.
             right: 0;
             bottom: 0;
             height: 2px;
-            background: linear-gradient(90deg, var(--accent-color), var(--accent-color-2));
+            background: var(--accent-color);
         }
 
         .header-left {
@@ -179,16 +210,31 @@ limitations under the License.
         }
 
         .title-section h1 {
-            font-size: var(--font-xl);
-            font-weight: 600;
+            font-family: var(--font-display);
+            font-size: var(--font-2xl);
+            font-weight: 800;
             color: #FFFFFF;
             margin-bottom: 2px;
-            letter-spacing: 0.2px;
+            letter-spacing: -0.4px;
+            line-height: 1;
         }
 
         .title-section .subtitle {
-            font-size: var(--font-xs);
-            color: rgba(255, 255, 255, 0.65);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 500;
+            /* Fixed color, not var(--accent-color) - the header plate is always navy
+               in both themes, but --accent-color flips to a dark green in light mode
+               (tuned for text on the light paper background), which is unreadable here. */
+            color: #7FE8B0;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-top: 3px;
+        }
+
+        .title-section .subtitle::before {
+            content: '// ';
+            color: rgba(255, 255, 255, 0.4);
         }
 
         .header-right {
@@ -204,7 +250,10 @@ limitations under the License.
             padding: var(--space-2) var(--space-4);
             border-radius: var(--radius-md);
             cursor: pointer;
-            font-size: var(--font-sm);
+            font-family: var(--font-mono);
+            font-size: var(--font-xs);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
             transition: all 0.2s;
             display: flex;
             align-items: center;
@@ -274,9 +323,15 @@ limitations under the License.
         }
 
         .settings-title {
-            font-size: var(--font-lg);
+            font-family: var(--font-mono);
+            font-size: var(--font-base);
             font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
             color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
         }
 
         .settings-close {
@@ -320,10 +375,20 @@ limitations under the License.
         }
 
         .settings-section-title {
-            font-size: var(--font-base);
+            font-family: var(--font-mono);
+            font-size: var(--font-2xs);
             font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
             color: var(--text-primary);
             margin-bottom: var(--space-3);
+            padding-bottom: var(--space-1-5);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .settings-section-title::before {
+            content: '// ';
+            color: var(--accent-color);
         }
 
         .settings-item {
@@ -355,11 +420,11 @@ limitations under the License.
             margin-top: var(--space-1);
         }
 
-        /* Toggle Switch */
+        /* Toggle Switch - mechanical rocker, not an iOS pill */
         .toggle-switch {
             position: relative;
-            width: 48px;
-            height: 26px;
+            width: 46px;
+            height: 24px;
             flex-shrink: 0;
         }
 
@@ -378,30 +443,32 @@ limitations under the License.
             bottom: 0;
             background-color: var(--bg-tertiary);
             border: 1px solid var(--border-color);
-            transition: 0.3s;
-            border-radius: var(--radius-full);
+            transition: 0.2s;
+            border-radius: var(--radius-sm);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
         }
 
         .toggle-slider:before {
             position: absolute;
             content: "";
-            height: 18px;
-            width: 18px;
+            height: 16px;
+            width: 16px;
             left: 3px;
-            bottom: 3px;
+            top: 3px;
             background-color: var(--text-secondary);
-            transition: 0.3s;
-            border-radius: 50%;
+            transition: 0.2s;
+            border-radius: 1px;
         }
 
         input:checked + .toggle-slider {
-            background-color: var(--accent-color);
+            background-color: var(--accent-soft);
             border-color: var(--accent-color);
         }
 
         input:checked + .toggle-slider:before {
             transform: translateX(22px);
-            background-color: white;
+            background-color: var(--accent-color);
+            box-shadow: 0 0 8px var(--accent-color);
         }
 
         /* Settings Dropdown */
@@ -518,7 +585,8 @@ limitations under the License.
 
         .drawer-rail-icon:hover {
             background: var(--accent-color);
-            color: #FFFFFF;
+            /* Dark glyph, not white - see .btn-primary for the contrast rationale */
+            color: #04150C;
             border-color: var(--accent-color);
         }
 
@@ -551,8 +619,11 @@ limitations under the License.
         }
 
         .panel-title {
-            font-size: var(--font-base);
+            font-family: var(--font-mono);
+            font-size: var(--font-xs);
             font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
             color: var(--text-primary);
             display: flex;
             align-items: center;
@@ -618,11 +689,13 @@ limitations under the License.
 
         label {
             display: block;
-            font-size: var(--font-xs);
-            font-weight: 500;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
             color: var(--text-secondary);
             margin-bottom: var(--space-1-5);
-            letter-spacing: 0.3px;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
         }
 
         input[type="text"],
@@ -636,8 +709,8 @@ limitations under the License.
             padding: var(--space-2-5) var(--space-3);
             border-radius: var(--radius-md);
             font-size: var(--font-sm);
-            font-family: inherit;
-            transition: border 0.2s;
+            font-family: var(--font-mono);
+            transition: border 0.2s, box-shadow 0.2s;
         }
 
         input:focus,
@@ -645,6 +718,7 @@ limitations under the License.
         textarea:focus {
             outline: none;
             border-color: var(--accent-color);
+            box-shadow: 0 0 0 1px var(--accent-border-soft);
         }
 
         /* Prevent browser autofill blue background */
@@ -686,15 +760,20 @@ limitations under the License.
 
         .btn-primary {
             background: var(--accent-color);
-            color: white;
+            /* Dark glyph on a bright phosphor-green field reads as a lit panel actuator,
+               and white text fails contrast against this luminance (~1.7:1). */
+            color: #04150C;
             border: 1px solid var(--accent-color);
+            font-family: var(--font-mono);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
         }
 
         .btn-primary:hover {
             background: var(--accent-hover);
             border-color: var(--accent-hover);
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(34, 211, 238, 0.3);
+            box-shadow: 0 4px 12px var(--accent-border-soft);
         }
 
         /* Tab-style underline (for future use) */
@@ -761,7 +840,8 @@ limitations under the License.
         }
 
         .input-hint {
-            font-size: var(--font-2xs);
+            font-family: var(--font-mono);
+            font-size: 10px;
             color: var(--text-muted);
             margin-top: var(--space-1);
         }
@@ -774,20 +854,20 @@ limitations under the License.
             border-bottom: 2px solid var(--border-color);
         }
 
-        /* Beta Badge - Small and Rotated */
+        /* Beta Badge - a squared inspection-stamp tag, not a rotated pill */
         .beta-badge {
             display: inline-block;
-            background: var(--warning-color);
-            color: #000;
-            font-size: 7px;
+            background: transparent;
+            border: 1px solid var(--warning-color);
+            color: var(--warning-color);
+            font-family: var(--font-mono);
+            font-size: 8px;
             font-weight: 700;
-            padding: 1px 1px;
-            border-radius: 2px;
-            margin-left: -6px;
-            vertical-align: super;
-            letter-spacing: 0.3px;
-            transform: rotate(50deg);
-            transform-origin: center;
+            padding: 0 3px;
+            border-radius: 1px;
+            margin-left: var(--space-1-5);
+            vertical-align: middle;
+            letter-spacing: 0.05em;
         }
 
         .input-source-tab {
@@ -798,15 +878,18 @@ limitations under the License.
             border-bottom: 2px solid transparent;
             margin-bottom: -2px;
             cursor: pointer;
-            font-size: var(--font-sm);
-            font-weight: 500;
+            font-family: var(--font-mono);
+            font-size: var(--font-xs);
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
             color: var(--text-muted);
             transition: all 0.2s;
         }
 
         .input-source-tab:hover {
             color: var(--text-primary);
-            background: rgba(34, 211, 238, 0.05);
+            background: var(--accent-soft);
         }
 
         .input-source-tab.active {
@@ -842,7 +925,7 @@ limitations under the License.
 
         .tooltip-icon:hover {
             background: var(--accent-color);
-            color: white;
+            color: #04150C;
         }
 
         .tooltip-text {
@@ -893,15 +976,23 @@ limitations under the License.
             align-items: center;
             gap: var(--space-1-5);
             padding: var(--space-1-5) var(--space-3);
-            border-radius: var(--radius-xl);
-            font-size: var(--font-xs);
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            font-family: var(--font-mono);
+            font-size: 10px;
             font-weight: 600;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
         }
 
+        /* This badge only ever sits on the fixed navy header plate, in both themes -
+           so, like the subtitle above, it needs fixed on-navy colors rather than the
+           theme-swapping --success-color/--text-muted/--accent-color (which flip to
+           dark tones in light mode and go unreadable on navy). */
         .status-badge.connected {
-            background: rgba(52, 199, 123, 0.15);
-            color: var(--success-color);
+            background: rgba(127, 232, 176, 0.16);
+            border-color: rgba(127, 232, 176, 0.4);
+            color: #7FE8B0;
         }
 
         .status-badge.connected::before {
@@ -909,7 +1000,7 @@ limitations under the License.
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: var(--success-color);
+            background: #7FE8B0;
         }
 
         @media (prefers-reduced-motion: no-preference) {
@@ -919,18 +1010,20 @@ limitations under the License.
         }
 
         @keyframes statusPulse {
-            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(52, 199, 123, 0.5); }
-            50% { opacity: 0.6; box-shadow: 0 0 0 4px rgba(52, 199, 123, 0); }
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(127, 232, 176, 0.5); }
+            50% { opacity: 0.6; box-shadow: 0 0 0 4px rgba(127, 232, 176, 0); }
         }
 
         .status-badge.disconnected {
-            background: rgba(107, 114, 128, 0.2);
-            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.18);
+            color: rgba(255, 255, 255, 0.65);
         }
 
         .status-badge.processing {
-            background: var(--accent-soft);
-            color: var(--accent-color);
+            background: rgba(127, 232, 176, 0.16);
+            border-color: rgba(127, 232, 176, 0.4);
+            color: #7FE8B0;
         }
 
         /* Video Display */
@@ -952,6 +1045,40 @@ limitations under the License.
             border-color: var(--accent-color);
             box-shadow: var(--card-shadow), var(--card-highlight),
                         0 0 0 1px var(--accent-soft), 0 0 28px var(--accent-soft);
+        }
+
+        /* Viewfinder reticle - four corner brackets, pure CSS, no markup added.
+           Dim structural hint at rest, lit accent-green frame once the camera is live. */
+        .video-card::after {
+            content: '';
+            position: absolute;
+            inset: 14px;
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0.4;
+            transition: opacity 0.3s ease;
+            --vf-color: rgba(255, 255, 255, 0.35);
+            background-image:
+                linear-gradient(to right, var(--vf-color) 2px, transparent 2px),
+                linear-gradient(to bottom, var(--vf-color) 2px, transparent 2px),
+                linear-gradient(to left, var(--vf-color) 2px, transparent 2px),
+                linear-gradient(to bottom, var(--vf-color) 2px, transparent 2px),
+                linear-gradient(to right, var(--vf-color) 2px, transparent 2px),
+                linear-gradient(to top, var(--vf-color) 2px, transparent 2px),
+                linear-gradient(to left, var(--vf-color) 2px, transparent 2px),
+                linear-gradient(to top, var(--vf-color) 2px, transparent 2px);
+            background-repeat: no-repeat;
+            background-size: 18px 2px, 2px 18px, 18px 2px, 2px 18px, 18px 2px, 2px 18px, 18px 2px, 2px 18px;
+            background-position:
+                top left, top left,
+                top right, top right,
+                bottom left, bottom left,
+                bottom right, bottom right;
+        }
+
+        .video-card.streaming-live::after {
+            opacity: 1;
+            --vf-color: var(--accent-color);
         }
 
         video {
@@ -1041,12 +1168,16 @@ limitations under the License.
             height: min(140px, 25vh);
             max-width: 80%;
             max-height: 80%;
-            border-radius: var(--radius-xl);
-            background: linear-gradient(135deg, var(--accent-color), var(--accent-color-2));
+            border-radius: var(--radius-lg);
+            background: var(--accent-color);
             border: none;
-            color: white;
-            font-size: var(--font-xl);
-            font-weight: 600;
+            /* Dark glyph on bright phosphor green - see .btn-primary for the contrast rationale */
+            color: #04150C;
+            font-family: var(--font-mono);
+            font-size: var(--font-base);
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
             cursor: pointer;
             box-shadow: 0 8px 24px var(--accent-soft);
             display: flex;
@@ -1055,7 +1186,7 @@ limitations under the License.
             justify-content: center;
             gap: var(--space-2);
             z-index: 100;
-            opacity: 0.8;
+            opacity: 0.85;
             transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, opacity 0.2s ease;
         }
 
@@ -1316,22 +1447,32 @@ limitations under the License.
         }
 
         .result-title {
-            font-size: var(--font-base);
+            font-family: var(--font-mono);
+            font-size: var(--font-xs);
             font-weight: 600;
             color: var(--text-secondary);
-            letter-spacing: 0.3px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
             margin-bottom: var(--space-1-5);
         }
 
+        .result-title::before {
+            content: '// ';
+            color: var(--accent-color);
+        }
+
         .result-subtitle {
-            font-size: var(--font-xs);
+            font-family: var(--font-mono);
+            font-size: 10px;
             color: var(--text-muted);
             line-height: 1.4;
         }
 
+        /* Prompt echo - a flat, right-aligned command tag rather than a chat bubble */
         .result-prompt {
-            font-size: var(--font-sm);
-            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: var(--font-xs);
+            color: var(--text-secondary);
             margin-top: var(--space-4);
             margin-bottom: var(--space-3);
             margin-left: auto;
@@ -1339,11 +1480,18 @@ limitations under the License.
             padding: var(--space-1-5) var(--space-3);
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
-            border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
+            border-right: 3px solid var(--text-muted);
+            border-radius: var(--radius-sm);
             max-width: 85%;
             word-wrap: break-word;
         }
 
+        .result-prompt::before {
+            content: 'PROMPT> ';
+            color: var(--text-muted);
+        }
+
+        /* VLM readout - a flat panel with a lit left edge, not an AI-gradient chat bubble */
         .result-text {
             font-size: var(--font-lg);
             line-height: 1.65;
@@ -1354,10 +1502,11 @@ limitations under the License.
             margin-left: 0;
             margin-right: auto;
             padding: var(--space-4) var(--space-5);
-            background: linear-gradient(135deg, rgba(34, 211, 238, 0.15) 0%, rgba(167, 139, 250, 0.12) 100%);
-            border: 1px solid rgba(34, 211, 238, 0.3);
-            box-shadow: 0 4px 24px rgba(34, 211, 238, 0.1);
-            border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-left: 3px solid var(--accent-color);
+            box-shadow: var(--card-shadow);
+            border-radius: var(--radius-sm);
             max-width: 90%;
             word-wrap: break-word;
             position: relative; /* For absolute positioning of button */
@@ -1371,17 +1520,17 @@ limitations under the License.
         /* Embedded markdown toggle button */
         .markdown-toggle-embedded {
             position: absolute;
-            top: -1px; /* Overlap balloon's top border */
-            right: -1px; /* Overlap balloon's right border */
+            top: -1px; /* Overlap panel's top border */
+            right: -1px; /* Overlap panel's right border */
             background: var(--bg-secondary);
-            border-top: 1px solid rgba(34, 211, 238, 0.3);
-            border-right: 1px solid rgba(34, 211, 238, 0.3);
-            border-left: 1px solid rgba(34, 211, 238, 0.3);
-            border-bottom: 1px solid rgba(34, 211, 238, 0.3);
-            border-radius: 0 var(--radius-xl) 0 0; /* Match top-right corner of balloon */
+            border: 1px solid var(--border-color);
+            border-radius: 0 var(--radius-sm) 0 0; /* Match top-right corner of panel */
             color: var(--text-secondary);
+            font-family: var(--font-mono);
             padding: var(--space-1) var(--space-2-5);
             font-size: var(--font-2xs);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -1438,8 +1587,8 @@ limitations under the License.
         }
 
         .copy-button-embedded.copied {
-            background: rgba(34, 211, 238, 0.6);
-            border-color: rgba(34, 211, 238, 0.4);
+            background: rgba(53, 226, 138, 0.55);
+            border-color: rgba(53, 226, 138, 0.5);
         }
 
         .copy-button-embedded.copied .lucide {
@@ -1506,7 +1655,7 @@ limitations under the License.
             border: 1px solid var(--border-color);
             padding: 2px var(--space-1-5);
             border-radius: var(--radius-sm);
-            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-family: var(--font-mono);
             font-size: 0.9em;
             color: var(--accent-color);
         }
@@ -1624,15 +1773,15 @@ limitations under the License.
             0% {
                 transform: scale(0.95);
                 opacity: 0.8;
-                box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4);
+                box-shadow: 0 0 0 0 rgba(53, 226, 138, 0.45);
             }
             50% {
-                box-shadow: 0 0 20px 4px rgba(34, 211, 238, 0.6);
+                box-shadow: 0 0 20px 4px rgba(53, 226, 138, 0.65);
             }
             100% {
                 transform: scale(1);
                 opacity: 1;
-                box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+                box-shadow: 0 0 0 0 rgba(53, 226, 138, 0);
             }
         }
 
@@ -1640,7 +1789,10 @@ limitations under the License.
         .metrics-inline {
             display: flex;
             gap: var(--space-4);
-            font-size: var(--font-xs);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
             color: var(--text-secondary);
         }
 
@@ -1652,6 +1804,7 @@ limitations under the License.
 
         .metric-value {
             font-weight: 600;
+            font-variant-numeric: tabular-nums;
             color: var(--accent-color);
         }
 
@@ -1678,23 +1831,28 @@ limitations under the License.
         }
 
         .stat-label {
-            font-size: var(--font-2xs);
+            font-family: var(--font-mono);
+            font-size: 10px;
             font-weight: 600;
             color: var(--text-secondary);
-            letter-spacing: 0.3px;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
         }
 
         .stat-value {
-            font-size: var(--font-lg);
+            font-family: var(--font-mono);
+            font-variant-numeric: tabular-nums;
+            font-size: var(--font-xl);
             font-weight: 700;
+            letter-spacing: -0.02em;
             color: var(--text-primary);
             white-space: nowrap;
         }
 
         .stat-value-denominator {
-            font-size: var(--font-base);
+            font-size: var(--font-sm);
             font-weight: 600;
-            opacity: 0.85;
+            opacity: 0.75;
         }
 
         .stat-bar {
@@ -1716,12 +1874,24 @@ limitations under the License.
             background: var(--warning-color);
         }
 
-        /* Circular ring gauges (CPU / RAM) */
+        /* Circular ring gauges (CPU / RAM) - a ring of tick marks behind the SVG
+           progress arc gives it a dial-instrument read rather than a plain donut chart */
         .ring-gauge-wrapper {
             position: relative;
             width: 100px;
             height: 100px;
             margin: var(--space-1) auto var(--space-2);
+        }
+
+        .ring-gauge-wrapper::before {
+            content: '';
+            position: absolute;
+            inset: -7px;
+            border-radius: 50%;
+            background: repeating-conic-gradient(var(--border-color) 0deg 1.5deg, transparent 1.5deg 9deg);
+            -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+            pointer-events: none;
         }
 
         .ring-gauge {
@@ -1733,14 +1903,14 @@ limitations under the License.
         .ring-track {
             fill: none;
             stroke: var(--bg-tertiary);
-            stroke-width: 10;
+            stroke-width: 8;
         }
 
         .ring-fill {
             fill: none;
             stroke: var(--accent-color);
-            stroke-width: 10;
-            stroke-linecap: round;
+            stroke-width: 8;
+            stroke-linecap: butt;
             transition: stroke-dashoffset 0.3s ease;
         }
 
@@ -1787,15 +1957,17 @@ limitations under the License.
             display: flex;
             align-items: center;
             gap: var(--space-1-5);
-            font-size: var(--font-sm);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
             color: var(--text-primary);
             white-space: nowrap;
         }
 
         .thermal-legend-swatch {
-            width: 10px;
-            height: 10px;
-            border-radius: 2px;
+            width: 8px;
+            height: 8px;
+            border-radius: 0;
             display: inline-block;
         }
 
@@ -1901,25 +2073,34 @@ limitations under the License.
             stroke: var(--text-secondary) !important;
         }
 
-        /* Colorful icon strokes (only when enabled) - Dark theme */
+        /* Colorful icon strokes (only when enabled) - Dark theme
+           Applied to both the expanded panel headers (.panel-icon) and the
+           collapsed drawer's icon rail (.drawer-rail-icon) - same three panels,
+           two different containers depending on whether the drawer is open or shut. */
         body.colorful-focus .panel-icon:has([data-lucide="globe"]) svg,
-        body.colorful-focus .panel-icon:has([data-lucide="globe"]) .lucide {
-            stroke: rgb(34, 211, 238) !important; /* Softer cyan */
+        body.colorful-focus .panel-icon:has([data-lucide="globe"]) .lucide,
+        body.colorful-focus .drawer-rail-icon:has([data-lucide="globe"]) svg,
+        body.colorful-focus .drawer-rail-icon:has([data-lucide="globe"]) .lucide {
+            stroke: var(--thermal-cpu) !important;
         }
 
         body.colorful-focus .panel-icon:has([data-lucide="video"]) svg,
-        body.colorful-focus .panel-icon:has([data-lucide="video"]) .lucide {
+        body.colorful-focus .panel-icon:has([data-lucide="video"]) .lucide,
+        body.colorful-focus .drawer-rail-icon:has([data-lucide="video"]) svg,
+        body.colorful-focus .drawer-rail-icon:has([data-lucide="video"]) .lucide {
             stroke: rgb(59, 130, 246) !important; /* Blue */
         }
 
         body.colorful-focus .panel-icon:has([data-lucide="edit-3"]) svg,
-        body.colorful-focus .panel-icon:has([data-lucide="edit-3"]) .lucide {
-            stroke: rgb(251, 191, 36) !important; /* Yellow/Orange */
+        body.colorful-focus .panel-icon:has([data-lucide="edit-3"]) .lucide,
+        body.colorful-focus .drawer-rail-icon:has([data-lucide="edit-3"]) svg,
+        body.colorful-focus .drawer-rail-icon:has([data-lucide="edit-3"]) .lucide {
+            stroke: var(--accent-color-2) !important; /* Amber */
         }
 
         body.colorful-focus .result-title:has([data-lucide="bot"]) svg,
         body.colorful-focus .result-title:has([data-lucide="bot"]) .lucide {
-            stroke: rgb(168, 85, 247) !important; /* Purple */
+            stroke: var(--thermal-npu) !important; /* Magenta - distinct from the green brand accent */
         }
 
         body.colorful-focus #systemStatsCard .result-title:has([data-lucide="activity"]) svg,
@@ -1929,23 +2110,29 @@ limitations under the License.
 
         /* Colorful icon strokes - Light theme (darker variants) */
         body.light-theme.colorful-focus .panel-icon:has([data-lucide="globe"]) svg,
-        body.light-theme.colorful-focus .panel-icon:has([data-lucide="globe"]) .lucide {
-            stroke: rgb(6, 182, 212) !important; /* Darker cyan */
+        body.light-theme.colorful-focus .panel-icon:has([data-lucide="globe"]) .lucide,
+        body.light-theme.colorful-focus .drawer-rail-icon:has([data-lucide="globe"]) svg,
+        body.light-theme.colorful-focus .drawer-rail-icon:has([data-lucide="globe"]) .lucide {
+            stroke: var(--thermal-cpu) !important;
         }
 
         body.light-theme.colorful-focus .panel-icon:has([data-lucide="video"]) svg,
-        body.light-theme.colorful-focus .panel-icon:has([data-lucide="video"]) .lucide {
+        body.light-theme.colorful-focus .panel-icon:has([data-lucide="video"]) .lucide,
+        body.light-theme.colorful-focus .drawer-rail-icon:has([data-lucide="video"]) svg,
+        body.light-theme.colorful-focus .drawer-rail-icon:has([data-lucide="video"]) .lucide {
             stroke: rgb(37, 99, 235) !important; /* Darker blue */
         }
 
         body.light-theme.colorful-focus .panel-icon:has([data-lucide="edit-3"]) svg,
-        body.light-theme.colorful-focus .panel-icon:has([data-lucide="edit-3"]) .lucide {
-            stroke: rgb(217, 119, 6) !important; /* Darker orange */
+        body.light-theme.colorful-focus .panel-icon:has([data-lucide="edit-3"]) .lucide,
+        body.light-theme.colorful-focus .drawer-rail-icon:has([data-lucide="edit-3"]) svg,
+        body.light-theme.colorful-focus .drawer-rail-icon:has([data-lucide="edit-3"]) .lucide {
+            stroke: var(--accent-color-2) !important; /* Darker amber */
         }
 
         body.light-theme.colorful-focus .result-title:has([data-lucide="bot"]) svg,
         body.light-theme.colorful-focus .result-title:has([data-lucide="bot"]) .lucide {
-            stroke: rgb(126, 34, 206) !important; /* Darker purple */
+            stroke: var(--thermal-npu) !important; /* Darker magenta */
         }
 
         body.light-theme.colorful-focus #systemStatsCard .result-title:has([data-lucide="activity"]) svg,
@@ -1977,12 +2164,12 @@ limitations under the License.
             stroke: rgb(13, 148, 136); /* Darker teal for light mode */
         }
 
-        /* Action button icons (play, stop) - White for contrast on cyan button */
+        /* Action button icons (play, stop) - dark glyph for contrast on the bright green button */
         .btn-primary .lucide {
-            stroke: white !important;
+            stroke: #04150C !important;
         }
         body.light-theme .btn-primary .lucide {
-            stroke: white !important;
+            stroke: #04150C !important;
         }
 
         .btn-secondary .lucide {
@@ -2001,7 +2188,7 @@ limitations under the License.
             transition: all 0.3s ease;
         }
 
-        /* Default: Neutral white focus glow (when colorful is disabled) */
+        /* Default: neutral phosphor-tinted focus glow (when colorful is disabled) */
         #promptText:focus,
         #maxTokens:focus,
         #processEvery:focus,
@@ -2010,9 +2197,9 @@ limitations under the License.
         #apiKey:focus,
         #modelSelect:focus,
         #rtspUrl:focus {
-            border-color: rgba(200, 200, 200, 0.6) !important;
-            box-shadow: 0 0 0 2px rgba(200, 200, 200, 0.15),
-                        0 0 8px rgba(200, 200, 200, 0.2) !important;
+            border-color: rgba(170, 182, 168, 0.65) !important;
+            box-shadow: 0 0 0 2px rgba(170, 182, 168, 0.15),
+                        0 0 8px rgba(170, 182, 168, 0.2) !important;
             outline: none;
         }
 
@@ -2035,24 +2222,24 @@ limitations under the License.
         body.colorful-focus #apiBaseUrl:focus,
         body.colorful-focus #apiKey:focus,
         body.colorful-focus #modelSelect:focus {
-            border-color: rgb(34, 211, 238) !important;
-            box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.25),
-                        0 0 12px rgba(34, 211, 238, 0.3) !important;
+            border-color: var(--accent-color) !important;
+            box-shadow: 0 0 0 3px var(--accent-soft),
+                        0 0 12px var(--accent-border-soft) !important;
         }
 
         /* Bright flash animation when applied (on blur) */
         @keyframes settingApplied {
             0% {
-                box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.7),
-                           0 0 20px rgba(34, 211, 238, 0.8);
+                box-shadow: 0 0 0 0 rgba(53, 226, 138, 0.7),
+                           0 0 20px rgba(53, 226, 138, 0.8);
             }
             50% {
-                box-shadow: 0 0 0 6px rgba(34, 211, 238, 0.3),
-                           0 0 30px rgba(34, 211, 238, 0.6);
+                box-shadow: 0 0 0 6px rgba(53, 226, 138, 0.3),
+                           0 0 30px rgba(53, 226, 138, 0.6);
             }
             100% {
-                box-shadow: 0 0 0 0 rgba(34, 211, 238, 0),
-                           0 0 0 rgba(34, 211, 238, 0);
+                box-shadow: 0 0 0 0 rgba(53, 226, 138, 0),
+                           0 0 0 rgba(53, 226, 138, 0);
             }
         }
 

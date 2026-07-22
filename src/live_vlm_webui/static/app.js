@@ -238,14 +238,14 @@
             if (!rtspUrl) {
                 statusDiv.textContent = '⚠️ Please enter an RTSP URL';
                 statusDiv.style.display = 'block';
-                statusDiv.style.color = '#ff6b35';
+                statusDiv.style.color = 'var(--error-color)';
                 return;
             }
 
             testBtn.disabled = true;
             statusDiv.textContent = '🔄 Testing connection...';
             statusDiv.style.display = 'block';
-            statusDiv.style.color = '#76b900';
+            statusDiv.style.color = 'var(--success-color)';
 
             try {
                 const response = await fetch('/api/rtsp/start', {
@@ -262,7 +262,7 @@
                 if (response.ok) {
                     const info = data.stream_info;
                     statusDiv.innerHTML = `✅ Connected!<br>${info.codec} ${info.width}x${info.height} @${info.fps}fps`;
-                    statusDiv.style.color = '#76b900';
+                    statusDiv.style.color = 'var(--success-color)';
 
                     // Stop the test connection after 2 seconds
                     setTimeout(async () => {
@@ -274,12 +274,12 @@
                     }, 2000);
                 } else {
                     statusDiv.textContent = '❌ ' + (data.error || 'Connection failed');
-                    statusDiv.style.color = '#ff6b35';
+                    statusDiv.style.color = 'var(--error-color)';
                 }
             } catch (err) {
                 console.error('RTSP test error:', err);
                 statusDiv.textContent = '❌ Connection failed: ' + err.message;
-                statusDiv.style.color = '#ff6b35';
+                statusDiv.style.color = 'var(--error-color)';
             } finally {
                 testBtn.disabled = false;
             }
