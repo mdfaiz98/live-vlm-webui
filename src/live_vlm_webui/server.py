@@ -308,6 +308,12 @@ async def models(request):
 async def detect_services(request):
     """Detect available local VLM services"""
     services = [
+        {
+            "name": "GenieX (via fix-up proxy)",
+            "url": "http://localhost:18182/v1",
+            "port": 18182,
+            "path": "/v1/models",
+        },
         {"name": "Ollama", "url": "http://localhost:11434/v1", "port": 11434, "path": "/api/tags"},
         {"name": "vLLM", "url": "http://localhost:8000/v1", "port": 8000, "path": "/v1/models"},
         {"name": "SGLang", "url": "http://localhost:30000/v1", "port": 30000, "path": "/v1/models"},
