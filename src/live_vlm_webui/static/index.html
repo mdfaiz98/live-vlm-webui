@@ -52,6 +52,9 @@ limitations under the License.
         </div>
         <div class="header-right">
             <span class="status-badge disconnected" id="connectionStatus">Disconnected</span>
+            <button class="settings-btn" id="helpBtn" title="Guided tour of the UI">
+                <i data-lucide="help-circle"></i>
+            </button>
             <button class="settings-btn" id="settingsBtn" title="Settings">
                 <i data-lucide="settings"></i>
             </button>
@@ -208,6 +211,27 @@ limitations under the License.
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guided Tour Overlay -->
+    <div class="tour-overlay" id="tourOverlay">
+        <div class="tour-highlight" id="tourHighlight"></div>
+        <div class="tour-tooltip" id="tourTooltip">
+            <div class="tour-tooltip-header">
+                <span class="tour-step-count" id="tourStepCount">Step 1 of 7</span>
+                <button class="tour-skip" id="tourSkipBtn">Skip tour ×</button>
+            </div>
+            <div class="tour-tooltip-title" id="tourTitle"></div>
+            <div class="tour-tooltip-body" id="tourBody"></div>
+            <div class="tour-tooltip-footer">
+                <button class="tour-btn tour-btn-secondary" id="tourBackBtn">
+                    <i data-lucide="chevron-left"></i> Back
+                </button>
+                <button class="tour-btn tour-btn-primary" id="tourNextBtn">
+                    Next <i data-lucide="chevron-right"></i>
+                </button>
             </div>
         </div>
     </div>

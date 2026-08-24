@@ -756,6 +756,171 @@
             });
         }
 
+        // Guided Tour
+        const tourSteps = [
+            {
+                selector: '#videoCard',
+                title: 'Live Video Stream',
+                body: 'The camera, RTSP stream, or video file being analyzed. Frames are periodically captured from here and sent to the VLM.'
+            },
+            {
+                selector: '#modelName',
+                title: 'Active Model',
+                body: 'The name of the VLM currently answering, as reported by the API endpoint configured in the Configuration panel.'
+            },
+            {
+                selector: '#currentPrompt',
+                title: 'Prompt',
+                body: 'The instruction sent to the model along with each captured frame — pick a preset or write a custom one in the Prompt Editor.'
+            },
+            {
+                selector: '#resultText',
+                title: 'Answer',
+                body: "The model's response to the prompt for the most recently processed frame."
+            },
+            {
+                selector: '#metricsInline',
+                title: 'Latency & Count',
+                body: 'Latency is the time the last request took to complete. Avg is the running average. Count is the number of frames processed so far this session. (Only visible once the stream is running and a response has come back - start the stream to see live values here.)'
+            },
+            {
+                selector: '#systemStatsCard',
+                title: 'Local System Stats',
+                body: 'Live on-device telemetry: CPU and RAM utilization, plus CPU / iGPU / NPU temperatures over time.'
+            },
+            {
+                selector: '#controlDrawer',
+                title: 'Configuration Panel',
+                body: 'VLM API endpoint and model selection, video source (webcam / RTSP / file), and the prompt editor all live here.',
+                beforeShow: () => expandDrawerToPanel('vlmConfig'),
+                // expandDrawerToPanel can animate the drawer width and/or
+                // collapse sibling panels (~300ms CSS transitions) - wait
+                // for that to settle before measuring the target's rect.
+                settleDelay: 340
+            }
+        ];
+
+        let tourIndex = 0;
+        const tourOverlay = document.getElementById('tourOverlay');
+        const tourHighlight = document.getElementById('tourHighlight');
+        const tourTooltip = document.getElementById('tourTooltip');
+        const tourTitle = document.getElementById('tourTitle');
+        const tourBody = document.getElementById('tourBody');
+        const tourStepCount = document.getElementById('tourStepCount');
+        const tourBackBtn = document.getElementById('tourBackBtn');
+        const tourNextBtn = document.getElementById('tourNextBtn');
+        const tourSkipBtn = document.getElementById('tourSkipBtn');
+        const helpBtn = document.getElementById('helpBtn');
+
+        function positionTourStep() {
+            const step = tourSteps[tourIndex];
+            const target = document.querySelector(step.selector);
+            if (!target) {
+                // Target not present in DOM (shouldn't happen) - skip it
+                tourNext();
+                return;
+            }
+            target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+
+            // Give scroll/panel-collapse/drawer-width CSS transitions time to
+            // settle before measuring - a plain double-rAF (~2 frames) isn't
+            // enough for the ~300ms transitions triggered by beforeShow().
+            setTimeout(() => {
+                const pad = 8;
+                // The target may be display:none (e.g. metricsInline before
+                // the first response arrives) - walk up to the nearest
+                // ancestor that actually occupies space rather than
+                // spotlighting a zero-size box.
+                let effectiveTarget = target;
+                while (effectiveTarget.parentElement &&
+                       effectiveTarget.getBoundingClientRect().width === 0 &&
+                       effectiveTarget.getBoundingClientRect().height === 0) {
+                    effectiveTarget = effectiveTarget.parentElement;
+                }
+                const rect = effectiveTarget.getBoundingClientRect();
+                const top = rect.top - pad;
+                const left = rect.left - pad;
+                const width = rect.width + pad * 2;
+                const height = rect.height + pad * 2;
+
+                tourHighlight.style.top = `${top}px`;
+                tourHighlight.style.left = `${left}px`;
+                tourHighlight.style.width = `${width}px`;
+                tourHighlight.style.height = `${height}px`;
+
+                // Place tooltip below the highlight if there's room, else above;
+                // clamp horizontally so it never runs off-screen.
+                const tooltipRect = tourTooltip.getBoundingClientRect();
+                const spaceBelow = window.innerHeight - (top + height);
+                let tooltipTop;
+                if (spaceBelow > tooltipRect.height + 24) {
+                    tooltipTop = top + height + 16;
+                } else if (top > tooltipRect.height + 24) {
+                    tooltipTop = top - tooltipRect.height - 16;
+                } else {
+                    tooltipTop = Math.max(16, (window.innerHeight - tooltipRect.height) / 2);
+                }
+
+                let tooltipLeft = left + width / 2 - tooltipRect.width / 2;
+                tooltipLeft = Math.min(Math.max(tooltipLeft, 16), window.innerWidth - tooltipRect.width - 16);
+
+                tourTooltip.style.top = `${tooltipTop}px`;
+                tourTooltip.style.left = `${tooltipLeft}px`;
+            }, step.settleDelay || 60);
+        }
+
+        function showTourStep(index) {
+            tourIndex = index;
+            const step = tourSteps[tourIndex];
+
+            tourTitle.textContent = step.title;
+            tourBody.textContent = step.body;
+            tourStepCount.textContent = `Step ${tourIndex + 1} of ${tourSteps.length}`;
+            tourBackBtn.disabled = tourIndex === 0;
+            tourNextBtn.innerHTML = tourIndex === tourSteps.length - 1
+                ? 'Done'
+                : 'Next <i data-lucide="chevron-right"></i>';
+            if (window.lucide) lucide.createIcons();
+
+            if (step.beforeShow) step.beforeShow();
+            positionTourStep();
+        }
+
+        function startTour() {
+            tourOverlay.classList.add('show');
+            showTourStep(0);
+            window.addEventListener('resize', positionTourStep);
+        }
+
+        function endTour() {
+            tourOverlay.classList.remove('show');
+            window.removeEventListener('resize', positionTourStep);
+        }
+
+        function tourNext() {
+            if (tourIndex < tourSteps.length - 1) {
+                showTourStep(tourIndex + 1);
+            } else {
+                endTour();
+            }
+        }
+
+        function tourBack() {
+            if (tourIndex > 0) showTourStep(tourIndex - 1);
+        }
+
+        helpBtn.addEventListener('click', startTour);
+        tourNextBtn.addEventListener('click', tourNext);
+        tourBackBtn.addEventListener('click', tourBack);
+        tourSkipBtn.addEventListener('click', endTour);
+
+        document.addEventListener('keydown', (e) => {
+            if (!tourOverlay.classList.contains('show')) return;
+            if (e.key === 'Escape') endTour();
+            if (e.key === 'ArrowRight') tourNext();
+            if (e.key === 'ArrowLeft') tourBack();
+        });
+
         // Fullscreen Toggle
         function toggleFullscreen() {
             const videoCard = document.getElementById('videoCard');
