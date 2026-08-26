@@ -893,7 +893,7 @@ limitations under the License.
         }
 
         #promptText {
-            font-size: 14px;
+            font-size: var(--font-md);
         }
 
         .btn {
@@ -1621,7 +1621,8 @@ limitations under the License.
         /* Prompt echo - a flat, right-aligned command tag rather than a chat bubble */
         .result-prompt {
             font-family: var(--font-mono);
-            font-size: var(--font-xs);
+            font-size: var(--font-base);
+            font-weight: 700;
             color: var(--text-secondary);
             margin-top: var(--space-4);
             margin-bottom: var(--space-3);
@@ -1643,7 +1644,7 @@ limitations under the License.
 
         /* VLM readout - a flat panel with a lit left edge, not an AI-gradient chat bubble */
         .result-text {
-            font-size: var(--font-lg);
+            font-size: var(--font-xl);
             line-height: 1.65;
             color: var(--text-primary);
             transition: opacity 3s ease, transform 0.3s ease, box-shadow 0.3s ease;

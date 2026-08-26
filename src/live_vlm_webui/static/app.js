@@ -1036,6 +1036,14 @@
             }
         }
 
+        // Model ids come back vendor-prefixed (e.g. "qualcomm/Qwen3-VL-4B-Instruct")
+        // because that's how GenieX's catalog namespaces them, not because the
+        // model itself is made by that vendor. Strip the prefix for display only —
+        // the full id is still what's used for selection/API calls.
+        function displayModelName(modelId) {
+            return modelId.includes('/') ? modelId.split('/').pop() : modelId;
+        }
+
         // Fetch Models
         async function fetchModels() {
             try {
@@ -1066,7 +1074,7 @@
                     data.models.forEach((model, index) => {
                         const option = document.createElement('option');
                         option.value = model.id;
-                        option.textContent = model.id;
+                        option.textContent = displayModelName(model.id);
                         if (model.current) {
                             option.selected = true;
                             currentModel = model.id;
@@ -1087,7 +1095,7 @@
 
                     // Update model name in VLM output header
                     if (currentModel) {
-                        document.getElementById('modelName').textContent = currentModel;
+                        document.getElementById('modelName').textContent = displayModelName(currentModel);
                     }
                 } else {
                     modelSelect.innerHTML = '<option value="">No models available</option>';
@@ -1104,7 +1112,7 @@
             if (!newModel) return;
 
             // Update model name in VLM output header
-            document.getElementById('modelName').textContent = newModel;
+            document.getElementById('modelName').textContent = displayModelName(newModel);
 
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 // Send model, API base, and API key together
@@ -1136,13 +1144,36 @@
             }
         });
 
-        // Helper function to apply prompt settings
-        function applyPromptSettings() {
-            const newPrompt = promptText.value.trim();
+        // Custom/edited prompts have no cap on how much text the model tries to
+        // generate, which is what drives the multi-minute GenieX stalls (see
+        // CLAUDE.md). Presets are already hand-tuned with a length constraint;
+        // this only appends one when the prompt doesn't already have one.
+        function ensureConciseAnswer(prompt) {
+            if (/\b(sentence|yes or no|word|short|brief|one line|concise)\b/i.test(prompt)) {
+                return prompt;
+            }
+            const separator = /[.!?]\s*$/.test(prompt) ? ' ' : '. ';
+            return prompt + separator + 'Answer in 1-2 sentences.';
+        }
+
+        // Helper function to apply prompt settings.
+        // skipConciseCheck=true for preset selection: presets are already
+        // hand-tuned (some rely on max_tokens rather than a sentence cap, e.g.
+        // Object Detection/OCR), so don't rewrite their wording.
+        function applyPromptSettings(skipConciseCheck = false) {
+            const trimmedPrompt = promptText.value.trim();
             const tokens = parseInt(maxTokens.value) || 512;
 
-            if (!newPrompt) {
+            if (!trimmedPrompt) {
                 return; // Silently skip if empty
+            }
+
+            const newPrompt = skipConciseCheck ? trimmedPrompt : ensureConciseAnswer(trimmedPrompt);
+
+            // Reflect the applied (possibly appended) prompt back into the
+            // textarea so what's sent is never hidden from the person editing it.
+            if (trimmedPrompt !== newPrompt) {
+                promptText.value = newPrompt;
             }
 
             if (websocket && websocket.readyState === WebSocket.OPEN) {
@@ -1162,7 +1193,7 @@
         promptPreset.addEventListener('change', (e) => {
             if (e.target.value) {
                 promptText.value = e.target.value;
-                applyPromptSettings();
+                applyPromptSettings(true); // presets are already length-tuned, don't rewrite them
 
                 // Trigger flash animation to show prompt was applied
                 promptText.classList.add('applied');
@@ -1870,7 +1901,7 @@
                 } else if (data.type === 'server_config') {
                     // Server sent its current configuration (model, api_base, prompt)
                     if (data.model) {
-                        document.getElementById('modelName').textContent = data.model;
+                        document.getElementById('modelName').textContent = displayModelName(data.model);
                         // Also update the model select if it matches
                         if (modelSelect.querySelector(`option[value="${data.model}"]`)) {
                             modelSelect.value = data.model;
@@ -1896,7 +1927,7 @@
                 } else if (data.type === 'model_updated') {
                     // Model was updated on server
                     if (data.model) {
-                        document.getElementById('modelName').textContent = data.model;
+                        document.getElementById('modelName').textContent = displayModelName(data.model);
                         console.log('Model updated to:', data.model);
                     }
                 } else if (data.type === 'prompt_updated') {
