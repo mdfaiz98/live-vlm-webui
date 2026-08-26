@@ -206,4 +206,14 @@ See `CLAUDE.md` for the full list and reasoning; summary:
 3. `python3 -m venv .venv && pip install -e .`
 4. Three terminals: `geniex serve` → `scripts/geniex_proxy.py` →
    `./scripts/start_server.sh --api-base http://127.0.0.1:18182/v1 --model qualcomm/Qwen3-VL-4B-Instruct`.
-5. Sanity-check with the `curl` command in §1 before opening the browser.
+
+   Or, instead of three manual terminals: `./scripts/run_demo.sh` starts all
+   three in a single `tmux` session (waiting for each dependency's port
+   before starting the next) and opens Firefox once the webui is ready.
+   Stop everything with `./scripts/stop_demo.sh`.
+5. Optional — double-clickable desktop icons for the two scripts above:
+   `./scripts/install_desktop_icons.sh` (run once per device; generates
+   `~/Desktop/VLM-Demo.desktop` and `~/Desktop/VLM-Demo-Stop.desktop` from
+   the templates in `scripts/desktop/`, pointed at wherever this device
+   cloned the repo).
+6. Sanity-check with the `curl` command in §1 before opening the browser.

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0.0
+Name=VLM Demo (Stop)
+Comment=Stop the offline on-device Qwen3-VL demo (kills geniex serve + proxy + webui)
+Exec=gnome-terminal -- bash -c "__REPO_DIR__/scripts/stop_demo.sh; echo; read -p 'Press Enter to close...'"
+Icon=__REPO_DIR__/src/live_vlm_webui/static/images/advantech-logo.png
+Terminal=false
+StartupNotify=false
+Type=Application
+Categories=Utility;Application;
