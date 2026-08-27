@@ -62,6 +62,12 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
 ]
+depth-camera = [
+    # Orbbec depth camera support (e.g. Gemini 2L). Prebuilt wheels only
+    # ship for specific platform/Python combos - see
+    # https://github.com/orbbec/pyorbbecsdk/releases
+    "pyorbbecsdk2>=2.1.2",
+]
 
 [project.urls]
 Homepage = "https://github.com/nvidia-ai-iot/live-vlm-webui"

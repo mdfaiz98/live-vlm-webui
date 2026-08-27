@@ -19,6 +19,7 @@ Main server that handles WebRTC connections and serves the web interface
 """
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -44,6 +45,7 @@ from .video_processor import VideoProcessorTrack
 from .gpu_monitor import create_monitor
 from .rtsp_track import RTSPVideoTrack
 from .video_file_track import VideoFileTrack
+from .orbbec_source import get_orbbec_manager, OrbbecColorTrack, OrbbecDeviceNotFoundError
 
 # Configure logging
 logging.basicConfig(
@@ -250,6 +252,20 @@ async def app_style(request):
 async def app_script(request):
     """Serve the extracted app JS (was previously inlined in index.html). See app_style() re: no-store."""
     path = os.path.join(os.path.dirname(__file__), "static", "app.js")
+    content = open(path, "r").read()
+    return web.Response(content_type="text/javascript", text=content, headers={"Cache-Control": "no-store"})
+
+
+async def depth_style(request):
+    """Serve the depth-camera page's stylesheet. See app_style() re: no-store."""
+    path = os.path.join(os.path.dirname(__file__), "static", "depth.css")
+    content = open(path, "r").read()
+    return web.Response(content_type="text/css", text=content, headers={"Cache-Control": "no-store"})
+
+
+async def depth_script(request):
+    """Serve the depth-camera page's JS. See app_style() re: no-store."""
+    path = os.path.join(os.path.dirname(__file__), "static", "depth.js")
     content = open(path, "r").read()
     return web.Response(content_type="text/javascript", text=content, headers={"Cache-Control": "no-store"})
 
@@ -604,6 +620,7 @@ async def offer(request):
     offer_sdp = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
     rtsp_url = params.get("rtsp_url")  # Optional RTSP URL for IP camera mode
     video_file_path = params.get("video_file_path")  # Optional local video file mode
+    use_orbbec = params.get("orbbec")  # Optional Orbbec depth camera Color stream
     session_id = params.get("session_id", "default")
 
     session = get_or_create_session(session_id)
@@ -699,6 +716,38 @@ async def offer(request):
                 status=500,
                 content_type="application/json",
                 text=json.dumps({"error": f"Failed to open video file: {str(e)}"}),
+            )
+    elif use_orbbec:
+        logger.info(f"[{session_id}] Creating Orbbec Color track")
+        try:
+            manager = get_orbbec_manager()
+            manager.start()
+
+            orbbec_track = OrbbecColorTrack(manager)
+            rtsp_cleanup_track = orbbec_track  # Stops this session's track wrapper, not the shared device
+
+            relayed_orbbec = relay.subscribe(orbbec_track)
+
+            processor_track = VideoProcessorTrack(
+                relayed_orbbec, session_vlm, text_callback=session_callback
+            )
+
+            pc.addTrack(processor_track)
+            logger.info("Added Orbbec Color processor track to peer connection")
+
+        except OrbbecDeviceNotFoundError as e:
+            logger.error(f"Orbbec device not found: {e}")
+            return web.Response(
+                status=404,
+                content_type="application/json",
+                text=json.dumps({"error": str(e)}),
+            )
+        except Exception as e:
+            logger.error(f"Failed to create Orbbec track: {e}")
+            return web.Response(
+                status=500,
+                content_type="application/json",
+                text=json.dumps({"error": f"Failed to start Orbbec camera: {str(e)}"}),
             )
     else:
         # Webcam mode: wait for browser to send track
@@ -887,6 +936,64 @@ async def rtsp_status(request):
         )
 
 
+async def depth_page(request):
+    """Serve the depth-camera test page (Color/Depth/IR grid + VLM output)."""
+    path = os.path.join(os.path.dirname(__file__), "static", "depth.html")
+    content = open(path, "r").read()
+    return web.Response(content_type="text/html", text=content, headers={"Cache-Control": "no-store"})
+
+
+async def orbbec_ws(request):
+    """
+    Push Depth/IR JPEG frames and IMU telemetry from the Orbbec camera.
+
+    Kept separate from the main /ws handler (VLM text/prompt/config messages)
+    since this is a different concern entirely - a fixed-rate frame/telemetry
+    push with no client->server messages to handle. Color goes over the
+    existing WebRTC pipeline instead (see offer()'s "orbbec" branch); Depth/IR
+    ride a plain WebSocket rather than extra WebRTC tracks - see CLAUDE.md's
+    aioice/loopback notes on why more WebRTC tracks isn't the easy win it
+    looks like here.
+
+    GET /ws/orbbec
+    """
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+
+    try:
+        manager = get_orbbec_manager()
+        manager.start()
+    except OrbbecDeviceNotFoundError as e:
+        await ws.send_json({"type": "error", "message": str(e)})
+        await ws.close()
+        return ws
+
+    push_interval_s = 1.0 / 12  # ~12fps is plenty for a depth/IR preview panel
+    try:
+        while not ws.closed:
+            depth_jpeg = manager.encode_depth_jpeg()
+            ir_jpeg = manager.encode_ir_jpeg()
+            telemetry = manager.get_telemetry()
+
+            await ws.send_json(
+                {
+                    "type": "orbbec_frame",
+                    "depth": base64.b64encode(depth_jpeg).decode("ascii") if depth_jpeg else None,
+                    "ir": base64.b64encode(ir_jpeg).decode("ascii") if ir_jpeg else None,
+                    "telemetry": telemetry,
+                }
+            )
+            await asyncio.sleep(push_interval_s)
+    except (ConnectionResetError, asyncio.CancelledError):
+        pass
+    except Exception as e:
+        logger.error(f"Orbbec WebSocket error: {e}", exc_info=True)
+    finally:
+        logger.info("Orbbec WebSocket client disconnected")
+
+    return ws
+
+
 # Directory where uploaded video files are stored - lives outside the git
 # repo/package (in the user's cache dir) since uploaded content shouldn't be
 # committed or bundled with the app
@@ -1044,6 +1151,12 @@ async def on_shutdown(app):
         gpu_monitor.cleanup()
         logger.info("GPU monitor cleaned up")
 
+    # Release the Orbbec camera, if it was ever opened
+    try:
+        get_orbbec_manager().stop()
+    except Exception as e:
+        logger.warning(f"Error stopping Orbbec camera: {e}")
+
     # Close all websockets and clear session state
     for ws in list(websockets):
         await ws.close()
@@ -1091,6 +1204,12 @@ async def create_app(test_mode=False):
 
     # Video file upload endpoint
     app.router.add_post("/api/video/upload", upload_video_file)
+
+    # Orbbec depth camera endpoints
+    app.router.add_get("/depth", depth_page)
+    app.router.add_get("/depth.css", depth_style)
+    app.router.add_get("/depth.js", depth_script)
+    app.router.add_get("/ws/orbbec", orbbec_ws)
 
     # Serve static files (images, etc.)
     # Always serve from static/images within the package (works for both pip and dev installs)

@@ -1,0 +1,294 @@
+<!--
+SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advantech Live VLM - Depth Camera Test</title>
+
+    <link rel="icon" type="image/svg+xml" href="favicon/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="favicon/favicon.ico">
+    <link rel="manifest" href="favicon/site.webmanifest">
+
+    <!-- Reuses the main app's design tokens/theme for visual consistency -->
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/depth.css">
+
+    <script src="/vendor/lucide.min.js"></script>
+</head>
+<body class="depth-page">
+    <div class="depth-header">
+        <div class="depth-header-left">
+            <a href="/" class="depth-back-link" title="Back to main demo">
+                <i data-lucide="arrow-left"></i>
+            </a>
+            <div class="depth-title">
+                <img src="/images/advantech-logo.png" alt="Advantech" class="depth-logo">
+                <div class="depth-title-text">
+                    <span class="depth-title-main">Live VLM</span>
+                    <span class="depth-title-sub">Depth Camera Test</span>
+                </div>
+            </div>
+        </div>
+        <div class="depth-header-right">
+            <button class="depth-btn" id="telemetryBtn" title="Local system stats + camera telemetry">
+                <i data-lucide="server"></i>
+                System Stats
+            </button>
+            <button class="depth-btn" id="promptBtn" title="Change the VLM prompt">
+                <i data-lucide="edit-3"></i>
+                Prompt
+            </button>
+            <button class="depth-btn depth-btn-primary" id="startStopBtn">
+                <i data-lucide="play"></i>
+                <span id="startStopLabel">Start</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="depth-status-bar" id="statusBar">Not connected</div>
+
+    <div class="depth-grid">
+        <div class="depth-panel" id="colorPanel">
+            <div class="depth-panel-header depth-panel-header-flex">
+                <span>Color</span>
+                <button class="depth-panel-toggle" id="colorFullscreenBtn" title="Fullscreen">
+                    <i data-lucide="maximize"></i>
+                </button>
+            </div>
+            <div class="depth-panel-body">
+                <video id="colorVideo" autoplay playsinline muted></video>
+                <div class="depth-panel-empty" id="colorEmpty">Press Start to connect</div>
+            </div>
+        </div>
+
+        <div class="depth-panel" id="depthPanel">
+            <div class="depth-panel-header depth-panel-header-flex">
+                <span>Depth</span>
+                <button class="depth-panel-toggle" id="depthFullscreenBtn" title="Fullscreen">
+                    <i data-lucide="maximize"></i>
+                </button>
+            </div>
+            <div class="depth-panel-body">
+                <img id="depthImage" alt="Depth stream">
+                <div class="depth-panel-empty" id="depthEmpty">Press Start to connect</div>
+            </div>
+        </div>
+
+        <div class="depth-panel" id="irPanel">
+            <div class="depth-panel-header depth-panel-header-flex">
+                <span id="irPanelTitle">IR</span>
+                <div class="depth-panel-header-actions">
+                    <button class="depth-panel-toggle" id="irSystemToggle" title="Switch between IR feed and system stats">
+                        <i data-lucide="activity"></i>
+                    </button>
+                    <button class="depth-panel-toggle" id="irFullscreenBtn" title="Fullscreen">
+                        <i data-lucide="maximize"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="depth-panel-body" id="irPanelBody">
+                <img id="irImage" alt="IR stream">
+                <div class="depth-panel-empty" id="irEmpty">Press Start to connect</div>
+            </div>
+            <div class="depth-panel-body depth-system-view" id="systemPanelBody" style="display: none;">
+                <div class="drawer-rings">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">CPU</span>
+                        </div>
+                        <div class="ring-gauge-wrapper">
+                            <svg class="ring-gauge" viewBox="0 0 100 100">
+                                <circle class="ring-track" cx="50" cy="50" r="42"></circle>
+                                <circle class="ring-fill" id="cpuRing" cx="50" cy="50" r="42"
+                                        stroke-dasharray="263.9" stroke-dashoffset="263.9"></circle>
+                            </svg>
+                            <div class="ring-center-text">
+                                <span class="stat-value" id="telCpuPercent">--%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-label">RAM</span>
+                        </div>
+                        <div class="ring-gauge-wrapper">
+                            <svg class="ring-gauge" viewBox="0 0 100 100">
+                                <circle class="ring-track" cx="50" cy="50" r="42"></circle>
+                                <circle class="ring-fill ram" id="ramRing" cx="50" cy="50" r="42"
+                                        stroke-dasharray="263.9" stroke-dashoffset="263.9"></circle>
+                            </svg>
+                            <div class="ring-center-text">
+                                <span class="stat-value" id="telRam" style="font-size: 13px;">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="thermal-legend depth-thermal-legend">
+                    <span class="thermal-legend-item">
+                        <span class="thermal-legend-swatch" style="background:var(--thermal-cpu);"></span>
+                        CPU: <span id="telCpuTemp">--</span>
+                    </span>
+                    <span class="thermal-legend-item">
+                        <span class="thermal-legend-swatch" style="background:var(--thermal-igpu);"></span>
+                        iGPU: <span id="telGpuTemp">--</span>
+                    </span>
+                    <span class="thermal-legend-item">
+                        <span class="thermal-legend-swatch" style="background:var(--thermal-npu);"></span>
+                        NPU: <span id="telNpuTemp">--</span>
+                    </span>
+                </div>
+                <canvas id="depthThermalChart" class="thermal-chart"></canvas>
+            </div>
+        </div>
+
+        <div class="depth-panel depth-vlm-panel" id="vlmPanel">
+            <div class="depth-panel-header depth-vlm-header">
+                <div class="depth-vlm-header-info">
+                    <span>VLM Output</span>
+                    <span class="depth-vlm-model">Model: <span id="vlmModelName">--</span></span>
+                </div>
+                <div class="depth-vlm-metrics" id="vlmMetrics" style="display: none;">
+                    <span>Latency: <span id="vlmLatency">--</span>ms</span>
+                    <span>Avg: <span id="vlmAvgLatency">--</span>ms</span>
+                    <span>Count: <span id="vlmCount">--</span></span>
+                </div>
+            </div>
+            <div class="depth-vlm-body" id="depthVlmScroll">
+                <div class="depth-vlm-prompt" id="vlmPrompt"></div>
+                <div class="depth-vlm-text" id="vlmText">Waiting for first answer&hellip;</div>
+                <div class="depth-vlm-history" id="vlmHistory"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt drawer - slide-out panel, not a separate window (kiosk-friendly,
+         no popup-blocker issues); toggled by the header buttons. The IR
+         panel's inline toggle covers quick-glance CPU/RAM/thermal only -
+         this drawer has the fuller picture: host OS/hardware identity plus
+         the Orbbec camera's own device/IMU telemetry. -->
+    <div class="telemetry-overlay" id="telemetryOverlay"></div>
+    <div class="telemetry-drawer" id="telemetryDrawer">
+        <div class="telemetry-drawer-header">
+            <div class="telemetry-drawer-title">
+                <i data-lucide="sliders-horizontal"></i>
+                Side Panel
+            </div>
+            <button class="depth-btn depth-btn-icon" id="telemetryCloseBtn">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+
+        <div class="drawer-tabs">
+            <button class="drawer-tab active" id="tabBtnStats" data-tab="stats">
+                <i data-lucide="server"></i>
+                Local System Stats
+            </button>
+            <button class="drawer-tab" id="tabBtnPrompt" data-tab="prompt">
+                <i data-lucide="edit-3"></i>
+                Prompt
+            </button>
+        </div>
+
+        <div class="drawer-tab-content" id="tabStats">
+            <div class="telemetry-section">
+                <div class="telemetry-section-title">System</div>
+                <div class="telemetry-row"><span>Board</span><span id="sysBoard">--</span></div>
+                <div class="telemetry-row"><span>SoC</span><span id="sysSoc">--</span></div>
+                <div class="telemetry-row"><span>CPU</span><span id="sysCpu">--</span></div>
+                <div class="telemetry-row"><span>GPU</span><span id="sysGpu">--</span></div>
+                <div class="telemetry-row"><span>NPU</span><span id="sysNpu">--</span></div>
+                <div class="telemetry-row"><span>Hostname</span><span id="sysHostname">--</span></div>
+                <div class="telemetry-row"><span>OS</span><span id="sysOs">--</span></div>
+                <div class="telemetry-row"><span>Kernel</span><span id="sysKernel">--</span></div>
+            </div>
+            <div class="telemetry-section">
+                <div class="telemetry-section-title">Camera Device</div>
+                <div class="telemetry-row"><span>Name</span><span id="telDeviceName">--</span></div>
+                <div class="telemetry-row"><span>Serial</span><span id="telDeviceSn">--</span></div>
+                <div class="telemetry-row"><span>Firmware</span><span id="telDeviceFw">--</span></div>
+                <div class="telemetry-row"><span>Connection</span><span id="telDeviceConn">--</span></div>
+            </div>
+            <div class="telemetry-section">
+                <div class="telemetry-section-title">Accelerometer (m/s&sup2;)</div>
+                <div class="telemetry-row"><span>X</span><span id="telAccelX">--</span></div>
+                <div class="telemetry-row"><span>Y</span><span id="telAccelY">--</span></div>
+                <div class="telemetry-row"><span>Z</span><span id="telAccelZ">--</span></div>
+            </div>
+            <div class="telemetry-section">
+                <div class="telemetry-section-title">Gyroscope (rad/s)</div>
+                <div class="telemetry-row"><span>X</span><span id="telGyroX">--</span></div>
+                <div class="telemetry-row"><span>Y</span><span id="telGyroY">--</span></div>
+                <div class="telemetry-row"><span>Z</span><span id="telGyroZ">--</span></div>
+            </div>
+            <div class="telemetry-section">
+                <div class="telemetry-section-title">Sensor Temperature</div>
+                <div class="telemetry-row"><span>IMU</span><span id="telTemp">--</span></div>
+            </div>
+        </div>
+
+        <div class="drawer-tab-content" id="tabPrompt" style="display: none;">
+            <div class="telemetry-section">
+                <div class="form-group">
+                    <label>Quick Presets</label>
+                    <select id="promptPreset">
+                        <option value="">-- Select a preset --</option>
+                        <optgroup label="Scene Understanding">
+                            <option value="Describe what you see in this image.">🖼️ Scene Description</option>
+                            <option value="List up to 5 main objects you see in this image, separated by commas. No descriptions, just names.">📦 Object Detection</option>
+                            <option value="Describe the person's activity and what they are doing.">🏃 Activity Recognition</option>
+                            <option value="Describe the facial expressions and emotions of people visible.">🙂 Emotion Detection</option>
+                            <option value="Describe the scene for a visually impaired person, focusing on the most important details.">🦯 Accessibility</option>
+                            <option value="Read and transcribe any text visible in the image." data-skip-length="true">🔤 OCR / Text Reading</option>
+                            <option value="Answer with Yes or No only: Is there a person visible?">✅ Yes/No Question</option>
+                        </optgroup>
+                        <optgroup label="Monitoring Use Cases">
+                            <option value="Are there any safety hazards visible? Answer with 'ALERT: description' or 'SAFE'.">⚠️ Safety Monitoring</option>
+                            <option value="Is anyone in the water showing signs of distress, unresponsive, or submerged and not moving?">🏊 Pool Safety (Drowning Detection)</option>
+                            <option value="Has anyone fallen or is lying on the floor abnormally?">🧓 Elder Care (Fall Detection)</option>
+                            <option value="Describe any people, vehicles, or unusual/suspicious activity visible.">🔒 Security Monitoring</option>
+                            <option value="Describe customer traffic and any safety concerns visible.">🛒 Retail Monitoring</option>
+                            <option value="Are workers wearing required safety equipment and staying out of restricted areas?">🦺 Warehouse Safety</option>
+                            <option value="Is anyone visibly using a cell phone, and if so what are they doing with it (texting, calling, scrolling)?">📱 Cell Phone Usage Monitoring</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Custom Prompt</label>
+                    <textarea id="promptText" placeholder="Enter your custom prompt here...">Describe what you see in this image.</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Answer Length</label>
+                    <select id="answerLength">
+                        <option value="1-2" selected>1-2 sentences</option>
+                        <option value="3-4">3-4 sentences</option>
+                        <option value="4-5">4-5 sentences</option>
+                        <option value="none">No limit (Max Tokens only)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Max Tokens</label>
+                    <input type="number" id="maxTokens" value="256" min="1" max="4096" step="1">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/depth.js"></script>
+</body>
+</html>

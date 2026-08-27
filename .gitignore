@@ -79,3 +79,6 @@ tests/e2e/.test-data/
 cert.pem
 key.pem
 *.pem
+
+# Orbbec SDK's own runtime log (written to CWD by default)
+Log/

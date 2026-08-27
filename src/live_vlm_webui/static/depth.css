@@ -1,0 +1,561 @@
+/*
+SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/* Depth camera test page - its own grid layout (Color/Depth/IR + VLM), reusing
+   the main app's design tokens (colors/spacing/type) from style.css for a
+   consistent look without inheriting its markup/JS. */
+
+body.depth-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.depth-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-5);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    z-index: 10;
+}
+
+.depth-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.depth-back-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+}
+
+.depth-back-link:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+}
+
+.depth-back-link .lucide {
+    width: 16px;
+    height: 16px;
+}
+
+.depth-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    color: var(--text-primary);
+}
+
+.depth-logo {
+    height: 32px;
+    width: auto;
+    display: block;
+}
+
+.depth-title-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.depth-title-main {
+    font-size: var(--font-lg);
+    font-weight: 600;
+}
+
+.depth-title-sub {
+    font-size: var(--font-xs);
+    color: var(--text-secondary);
+}
+
+.depth-header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.depth-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3-5);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.depth-btn:hover {
+    border-color: var(--accent-color);
+    background: var(--bg-elevated);
+}
+
+.depth-btn .lucide {
+    width: 16px;
+    height: 16px;
+}
+
+.depth-btn-primary {
+    background: var(--accent-soft);
+    border-color: var(--accent-border-soft);
+}
+
+.depth-btn-primary.active {
+    background: var(--error-border-soft);
+    border-color: var(--error-color);
+    color: var(--error-color);
+}
+
+.depth-btn-icon {
+    padding: var(--space-2);
+}
+
+.depth-status-bar {
+    padding: var(--space-1-5) var(--space-5);
+    font-family: var(--font-mono);
+    font-size: var(--font-xs);
+    color: var(--text-muted);
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+}
+
+.depth-status-bar.connected {
+    color: var(--success-color);
+}
+
+.depth-status-bar.error {
+    color: var(--error-color);
+}
+
+.depth-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    min-height: 0;
+}
+
+.depth-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--card-shadow);
+    overflow: hidden;
+    min-height: 0;
+}
+
+.depth-panel-header {
+    padding: var(--space-2) var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--font-xs);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.depth-panel-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+}
+
+.depth-panel-body video,
+.depth-panel-body img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.depth-panel-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: var(--font-sm);
+    font-family: var(--font-mono);
+    pointer-events: none;
+}
+
+/* .has-content is toggled on the outer .depth-panel (see depth.js
+   markHasContent), not .depth-panel-body itself - match on any ancestor. */
+.depth-panel.has-content .depth-panel-empty {
+    display: none;
+}
+
+/* IR panel doubles as a system-telemetry view (toggle button in its header) */
+.depth-panel-header-flex {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.depth-panel-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.depth-panel-toggle:hover,
+.depth-panel-toggle.active {
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+    background: var(--bg-elevated);
+}
+
+.depth-panel-header-actions {
+    display: flex;
+    gap: var(--space-1);
+}
+
+/* Fullscreen - CSS-only overlay (fixed inset:0), same approach as the main
+   app's .video-card.fullscreen, no Fullscreen API/permissions needed. */
+.depth-panel.fullscreen {
+    position: fixed;
+    inset: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999;
+    margin: 0;
+    border-radius: 0;
+    border: none;
+}
+
+.depth-panel-toggle .lucide {
+    width: 12px;
+    height: 12px;
+}
+
+.depth-system-view {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: var(--space-3);
+    overflow-y: auto;
+}
+
+.depth-system-view .drawer-rings {
+    flex-shrink: 0;
+}
+
+.depth-thermal-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--font-2xs);
+    color: var(--text-secondary);
+}
+
+/* VLM panel - reuses .result-prompt / .result-text visual language from the
+   main app's style.css for a consistent "readout" look. */
+.depth-vlm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.depth-vlm-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.depth-vlm-model {
+    font-family: var(--font-mono);
+    font-size: var(--font-2xs);
+    font-weight: 400;
+    text-transform: none;
+    color: var(--accent-color-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.depth-vlm-metrics {
+    display: flex;
+    gap: var(--space-3);
+    font-family: var(--font-mono);
+    font-size: var(--font-2xs);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.depth-vlm-metrics span span {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.depth-vlm-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    padding: var(--space-3);
+}
+
+.depth-vlm-prompt {
+    font-family: var(--font-mono);
+    font-size: var(--font-base);
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-3);
+}
+
+.depth-vlm-prompt::before {
+    content: 'PROMPT> ';
+    color: var(--text-muted);
+}
+
+.depth-vlm-text {
+    font-size: var(--font-2xl);
+    line-height: 1.6;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+}
+
+/* Pop-in + glow on new answers - reuses @keyframes popIn/popInWithGlow
+   already defined in style.css (both stylesheets load on this page). */
+.depth-vlm-text.new-message {
+    animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.depth-vlm-text.new-message.with-glow {
+    animation: popInWithGlow 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Answer scrollback - past answers drop below the current one, newest first
+   within the history block. Slim log rows, not a repeated copy of the
+   current-answer styling (mirrors .result-history-entry in the main app). */
+@keyframes depthHistorySlideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 0.6; transform: translateY(0); }
+}
+
+.depth-vlm-history-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2) 0;
+    margin-top: var(--space-2);
+    border-top: 1px solid var(--border-color);
+    opacity: 0.6;
+    animation: depthHistorySlideIn 0.35s ease-out;
+}
+
+.depth-vlm-history-entry .depth-vlm-history-prompt {
+    font-family: var(--font-mono);
+    font-size: var(--font-2xs);
+    color: var(--text-muted);
+}
+
+.depth-vlm-history-entry .depth-vlm-history-text {
+    font-size: var(--font-sm);
+    line-height: 1.5;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+}
+
+/* Telemetry drawer */
+.telemetry-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 900;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.telemetry-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.telemetry-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 320px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
+    z-index: 901;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+}
+
+.telemetry-drawer.open {
+    transform: translateX(0);
+}
+
+.telemetry-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-4) var(--space-4);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.telemetry-drawer-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-md);
+    font-weight: 600;
+}
+
+.telemetry-drawer-title .lucide {
+    width: 18px;
+    height: 18px;
+    color: var(--accent-color);
+}
+
+.drawer-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.drawer-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-display);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.drawer-tab:hover {
+    color: var(--text-primary);
+}
+
+.drawer-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent-color);
+}
+
+.drawer-tab .lucide {
+    width: 14px;
+    height: 14px;
+}
+
+.drawer-tab-content .form-group {
+    margin-bottom: var(--space-4);
+}
+
+.drawer-rings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.drawer-rings .ring-gauge-wrapper {
+    width: 84px;
+    height: 84px;
+}
+
+.telemetry-section {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.telemetry-section-title {
+    font-family: var(--font-mono);
+    font-size: var(--font-2xs);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: var(--space-2);
+}
+
+.telemetry-row {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-1) 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-sm);
+}
+
+.telemetry-row span:first-child {
+    color: var(--text-secondary);
+}
+
+.telemetry-row span:last-child {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+@media (max-width: 900px) {
+    .depth-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, minmax(200px, 1fr));
+        overflow-y: auto;
+    }
+}
