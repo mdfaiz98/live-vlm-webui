@@ -55,6 +55,8 @@
         const connectionStatus = document.getElementById('connectionStatus');
         const resultText = document.getElementById('resultText');
         const currentPrompt = document.getElementById('currentPrompt');
+        const resultScroll = document.getElementById('resultScroll');
+        const resultHistory = document.getElementById('resultHistory');
         const metricsInline = document.getElementById('metricsInline');
         const markdownToggle = document.getElementById('markdownToggle');
         const markdownIcon = document.getElementById('markdownIcon');
@@ -65,6 +67,7 @@
         const countValue = document.getElementById('countValue');
         const promptPreset = document.getElementById('promptPreset');
         const promptText = document.getElementById('promptText');
+        const answerLength = document.getElementById('answerLength');
         const maxTokens = document.getElementById('maxTokens');
         const modelSelect = document.getElementById('modelSelect');
         const refreshModelsBtn = document.getElementById('refreshModelsBtn');
@@ -460,6 +463,59 @@
             if (videoCard && videoCard.classList.contains('fullscreen')) {
                 syncVlmToFullscreen();
             }
+        }
+
+        // Scrollback: how many past answers stay visible below the current one.
+        const MAX_ANSWER_HISTORY = 2;
+
+        // Archives the answer that's about to be replaced, so it doesn't just
+        // vanish before someone's finished reading it — it drops into a slim,
+        // muted history log below the current (newest) answer instead.
+        // Read-only (no markdown toggle/copy button - those stay on the live one).
+        function pushAnswerToHistory(promptStr, text) {
+            if (!resultHistory || !text) return;
+
+            const entry = document.createElement('div');
+            entry.className = 'result-history-entry';
+
+            const promptEl = document.createElement('div');
+            promptEl.className = 'result-prompt';
+            promptEl.textContent = promptStr || '';
+
+            const textEl = document.createElement('div');
+            textEl.className = 'result-text';
+            if (markdownEnabled) {
+                textEl.innerHTML = renderMarkdown(text);
+                textEl.classList.add('markdown-rendered');
+            } else {
+                textEl.textContent = text;
+            }
+
+            entry.appendChild(promptEl);
+            entry.appendChild(textEl);
+            resultHistory.prepend(entry); // newest-of-the-old goes right below the current answer
+
+            while (resultHistory.children.length > MAX_ANSWER_HISTORY) {
+                resultHistory.removeChild(resultHistory.lastElementChild);
+            }
+
+            // Slide the entry down into place instead of just popping into existence.
+            motionAnimate(entry, { opacity: [0, 0.6], transform: ['translateY(-6px)', 'translateY(0)'] },
+                { duration: 0.35, easing: 'ease-out' });
+        }
+
+        function clearAnswerHistory() {
+            if (resultHistory) {
+                resultHistory.innerHTML = '';
+            }
+        }
+
+        // New answers always render in the same spot (#resultText, at the top
+        // of #resultScroll) - this just snaps the view back up to it in case
+        // someone had scrolled down into the history log to read further back.
+        function scrollResultToLatest() {
+            if (!resultScroll) return;
+            resultScroll.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         // Enumerate cameras on page load
@@ -1144,23 +1200,38 @@
             }
         });
 
-        // Custom/edited prompts have no cap on how much text the model tries to
-        // generate, which is what drives the multi-minute GenieX stalls (see
-        // CLAUDE.md). Presets are already hand-tuned with a length constraint;
-        // this only appends one when the prompt doesn't already have one.
-        function ensureConciseAnswer(prompt) {
-            if (/\b(sentence|yes or no|word|short|brief|one line|concise)\b/i.test(prompt)) {
-                return prompt;
+        // Answer-length control: baked into the outgoing prompt at send time,
+        // never written back into the textarea. This is what caps generation
+        // length to avoid the multi-minute GenieX stalls (see CLAUDE.md) -
+        // explicit and visible instead of a regex silently rewriting prompts,
+        // which used to double up on presets that already had their own
+        // wording (e.g. "Answer in 1-2 sentences. Answer in 1-2 sentences.").
+        const ANSWER_LENGTH_INSTRUCTIONS = {
+            '1-2': 'Answer in 1-2 sentences.',
+            '3-4': 'Answer in 3-4 sentences.',
+            '4-5': 'Answer in 4-5 sentences.',
+            'none': ''
+        };
+        const ANSWER_LENGTH_STORAGE_KEY = 'answerLength';
+
+        if (answerLength) {
+            const savedLength = localStorage.getItem(ANSWER_LENGTH_STORAGE_KEY);
+            if (savedLength && ANSWER_LENGTH_INSTRUCTIONS[savedLength] !== undefined) {
+                answerLength.value = savedLength;
             }
-            const separator = /[.!?]\s*$/.test(prompt) ? ' ' : '. ';
-            return prompt + separator + 'Answer in 1-2 sentences.';
         }
 
-        // Helper function to apply prompt settings.
-        // skipConciseCheck=true for preset selection: presets are already
-        // hand-tuned (some rely on max_tokens rather than a sentence cap, e.g.
-        // Object Detection/OCR), so don't rewrite their wording.
-        function applyPromptSettings(skipConciseCheck = false) {
+        function buildFinalPrompt(rawPrompt) {
+            const instruction = ANSWER_LENGTH_INSTRUCTIONS[answerLength?.value] || '';
+            if (!instruction) {
+                return rawPrompt;
+            }
+            const separator = /[.!?]\s*$/.test(rawPrompt) ? ' ' : '. ';
+            return rawPrompt + separator + instruction;
+        }
+
+        // Helper function to apply prompt settings
+        function applyPromptSettings() {
             const trimmedPrompt = promptText.value.trim();
             const tokens = parseInt(maxTokens.value) || 512;
 
@@ -1168,24 +1239,36 @@
                 return; // Silently skip if empty
             }
 
-            const newPrompt = skipConciseCheck ? trimmedPrompt : ensureConciseAnswer(trimmedPrompt);
-
-            // Reflect the applied (possibly appended) prompt back into the
-            // textarea so what's sent is never hidden from the person editing it.
-            if (trimmedPrompt !== newPrompt) {
-                promptText.value = newPrompt;
-            }
+            const finalPrompt = buildFinalPrompt(trimmedPrompt);
 
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 websocket.send(JSON.stringify({
                     type: 'update_prompt',
-                    prompt: newPrompt,
+                    prompt: finalPrompt,
                     max_tokens: tokens
                 }));
 
-                // Update the displayed prompt (chat bubble style)
-                const promptPreview = newPrompt.length > 150 ? newPrompt.substring(0, 150) + '...' : newPrompt;
+                // Update the displayed prompt (chat bubble style) with what's
+                // actually sent, including the baked-in length instruction.
+                const promptPreview = finalPrompt.length > 150 ? finalPrompt.substring(0, 150) + '...' : finalPrompt;
                 currentPrompt.textContent = `Prompt: ${promptPreview}`;
+            }
+        }
+
+        // Presets with their own structured output format (robot navigation's
+        // exact command grammar, OCR's full transcription) shouldn't get a
+        // sentence-count instruction bolted on - it would corrupt the format
+        // or truncate legitimate output. Force the dropdown to "none" for those.
+        function applyAnswerLengthConstraintFor(selectedOption) {
+            if (!answerLength) return;
+            const skip = selectedOption?.dataset.skipLength === 'true';
+            answerLength.disabled = skip;
+            if (skip) {
+                answerLength.dataset.previousValue = answerLength.value;
+                answerLength.value = 'none';
+            } else if (answerLength.dataset.previousValue) {
+                answerLength.value = answerLength.dataset.previousValue;
+                delete answerLength.dataset.previousValue;
             }
         }
 
@@ -1193,7 +1276,8 @@
         promptPreset.addEventListener('change', (e) => {
             if (e.target.value) {
                 promptText.value = e.target.value;
-                applyPromptSettings(true); // presets are already length-tuned, don't rewrite them
+                applyAnswerLengthConstraintFor(e.target.selectedOptions[0]);
+                applyPromptSettings();
 
                 // Trigger flash animation to show prompt was applied
                 promptText.classList.add('applied');
@@ -1205,6 +1289,13 @@
 
         // Auto-apply prompt on blur (when user finishes editing)
         promptText.addEventListener('blur', () => {
+            // If the text no longer matches the structured preset that disabled
+            // the length dropdown (e.g. Robot Navigation), it's a custom edit now -
+            // re-enable the dropdown instead of leaving it stuck on "none".
+            if (answerLength?.disabled && promptText.value.trim() !== promptPreset.value) {
+                applyAnswerLengthConstraintFor(null);
+            }
+
             applyPromptSettings();
 
             // Trigger flash animation to show prompt was applied
@@ -1213,6 +1304,19 @@
                 promptText.classList.remove('applied');
             }, 600); // Match animation duration
         });
+
+        // Auto-apply when answer length changes
+        if (answerLength) {
+            answerLength.addEventListener('change', () => {
+                localStorage.setItem(ANSWER_LENGTH_STORAGE_KEY, answerLength.value);
+                applyPromptSettings();
+
+                answerLength.classList.add('applied');
+                setTimeout(() => {
+                    answerLength.classList.remove('applied');
+                }, 600);
+            });
+        }
 
         // Auto-apply when max tokens changes
         maxTokens.addEventListener('change', () => {
@@ -1815,8 +1919,17 @@
                 const data = JSON.parse(event.data);
 
                 if (data.type === 'vlm_response') {
+                    const isNewAnswer = data.text !== lastText;
+
                     // Trigger animations for new messages based on settings
-                    if (data.text !== lastText) {
+                    if (isNewAnswer) {
+                        // Archive the answer being replaced instead of letting it
+                        // just vanish - keeps the last couple readable while
+                        // scrolling.
+                        if (lastText) {
+                            pushAnswerToHistory(currentPrompt.textContent, lastText);
+                        }
+
                         resultText.classList.remove('fade');
                         resultText.classList.remove('new-message');
 
@@ -1853,6 +1966,10 @@
 
                     updateResultText(data.text);
                     lastText = data.text;
+
+                    if (isNewAnswer) {
+                        scrollResultToLatest();
+                    }
 
                     // Update video overlay (always, visibility is controlled by CSS)
                     videoOverlay.textContent = data.text;
@@ -2459,6 +2576,7 @@
             resultText.classList.remove('fade');
             videoOverlay.textContent = '';
             lastText = '';
+            clearAnswerHistory();
         }
 
         // Sidebar start/stop buttons removed - using overlay buttons instead

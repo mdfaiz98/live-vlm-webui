@@ -435,26 +435,26 @@ limitations under the License.
                         <select id="promptPreset">
                             <option value="">-- Select a preset --</option>
                             <optgroup label="Scene Understanding">
-                                <option value="Describe what you see in this image in one sentence.">🖼️ Scene Description</option>
+                                <option value="Describe what you see in this image.">🖼️ Scene Description</option>
                                 <option value="List up to 5 main objects you see in this image, separated by commas. No descriptions, just names.">📦 Object Detection</option>
-                                <option value="Describe the person's activity and what they are doing. Answer in 1-2 sentences.">🏃 Activity Recognition</option>
-                                <option value="Describe the facial expressions and emotions of people visible. Answer in 1-2 sentences.">🙂 Emotion Detection</option>
-                                <option value="Describe the scene for a visually impaired person, focusing on the most important details. Answer in 1-2 sentences.">🦯 Accessibility</option>
-                                <option value="Read and transcribe any text visible in the image.">🔤 OCR / Text Reading</option>
+                                <option value="Describe the person's activity and what they are doing.">🏃 Activity Recognition</option>
+                                <option value="Describe the facial expressions and emotions of people visible.">🙂 Emotion Detection</option>
+                                <option value="Describe the scene for a visually impaired person, focusing on the most important details.">🦯 Accessibility</option>
+                                <option value="Read and transcribe any text visible in the image." data-skip-length="true">🔤 OCR / Text Reading</option>
                                 <option value="Answer with Yes or No only: Is there a person visible?">✅ Yes/No Question</option>
                             </optgroup>
                             <optgroup label="Monitoring Use Cases">
                                 <option value="Are there any safety hazards visible? Answer with 'ALERT: description' or 'SAFE'.">⚠️ Safety Monitoring</option>
-                                <option value="Is anyone in the water showing signs of distress, unresponsive, or submerged and not moving? Answer in 1-2 sentences.">🏊 Pool Safety (Drowning Detection)</option>
-                                <option value="Has anyone fallen or is lying on the floor abnormally? Answer in 1-2 sentences.">🧓 Elder Care (Fall Detection)</option>
-                                <option value="Describe any people, vehicles, or unusual/suspicious activity visible. Answer in 1-2 sentences.">🔒 Security Monitoring</option>
-                                <option value="Describe customer traffic and any safety concerns visible. Answer in 1-2 sentences.">🛒 Retail Monitoring</option>
-                                <option value="Are workers wearing required safety equipment and staying out of restricted areas? Answer in 1-2 sentences.">🦺 Warehouse Safety</option>
-                                <option value="Is anyone visibly using a cell phone, and if so what are they doing with it (texting, calling, scrolling)? Answer in 1-2 sentences.">📱 Cell Phone Usage Monitoring</option>
+                                <option value="Is anyone in the water showing signs of distress, unresponsive, or submerged and not moving?">🏊 Pool Safety (Drowning Detection)</option>
+                                <option value="Has anyone fallen or is lying on the floor abnormally?">🧓 Elder Care (Fall Detection)</option>
+                                <option value="Describe any people, vehicles, or unusual/suspicious activity visible.">🔒 Security Monitoring</option>
+                                <option value="Describe customer traffic and any safety concerns visible.">🛒 Retail Monitoring</option>
+                                <option value="Are workers wearing required safety equipment and staying out of restricted areas?">🦺 Warehouse Safety</option>
+                                <option value="Is anyone visibly using a cell phone, and if so what are they doing with it (texting, calling, scrolling)?">📱 Cell Phone Usage Monitoring</option>
                             </optgroup>
                             <optgroup label="Robot Navigation">
-                            <option value="You are a robot. Describe what you see, then give 5 navigation commands to get to a possible location of a bathroom. Format: 'linear_x=0.3, angular_z=0.0 # reason'. Keep linear_x between -0.5 and 0.5, angular_z between -1.0 and 1.0.">🤖 Robot Navigation (Simple)</option>
-                            <option value="You are controlling a mobile robot with differential drive. Camera: 1.0m height, forward-facing. Generate ROS cmd_vel commands based on what you see to get to a possible location of a bathroom.
+                            <option value="You are a robot. Describe what you see, then give 5 navigation commands to get to a possible location of a bathroom. Format: 'linear_x=0.3, angular_z=0.0 # reason'. Keep linear_x between -0.5 and 0.5, angular_z between -1.0 and 1.0." data-skip-length="true">🤖 Robot Navigation (Simple)</option>
+                            <option data-skip-length="true" value="You are controlling a mobile robot with differential drive. Camera: 1.0m height, forward-facing. Generate ROS cmd_vel commands based on what you see to get to a possible location of a bathroom.
 
 CRITICAL CONSTRAINTS:
 - linear.x: MUST be between -0.5 and +0.5 m/s (violations will cause robot damage)
@@ -473,7 +473,17 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
                     </div>
                     <div class="form-group">
                         <label>Custom Prompt</label>
-                        <textarea id="promptText" placeholder="Enter your custom prompt here...">Describe what you see in this image in one sentence.</textarea>
+                        <textarea id="promptText" placeholder="Enter your custom prompt here...">Describe what you see in this image.</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Answer Length</label>
+                        <select id="answerLength">
+                            <option value="1-2" selected>1-2 sentences</option>
+                            <option value="3-4">3-4 sentences</option>
+                            <option value="4-5">4-5 sentences</option>
+                            <option value="none">No limit (Max Tokens only)</option>
+                        </select>
+                        <div class="input-hint" id="answerLengthHint">Baked into the prompt automatically — keeps answers short and avoids GenieX stalls on long generations.</div>
                     </div>
                     <div class="form-group">
                         <label>Max Tokens</label>
@@ -528,7 +538,7 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
             </div>
 
             <!-- Generation Result -->
-            <div class="result-card">
+            <div class="result-card" id="vlmResultCard">
                 <div class="result-header">
                     <div class="result-header-left">
                         <div class="result-title">
@@ -558,28 +568,35 @@ After commands, explain: obstacles detected, clearance margins, goal inference, 
                     </div>
             </div>
 
-                <div class="result-prompt" id="currentPrompt"></div>
-                <div id="requestPayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
-                    <details style="margin: 0;">
-                        <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary);">// Request payload (debug)</summary>
-                        <pre id="requestPayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
-                    </details>
-                </div>
-                <div class="result-text" id="resultText">
-                    <button class="markdown-toggle-embedded" id="markdownToggle" title="Toggle Markdown Rendering">
-                        <span id="markdownIcon"><i data-lucide="code"></i></span>
-                        <span id="markdownText">Markdown</span>
+                <div class="result-scroll" id="resultScroll">
+                    <div class="result-prompt" id="currentPrompt"></div>
+                    <div id="requestPayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
+                        <details style="margin: 0;">
+                            <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary);">// Request payload (debug)</summary>
+                            <pre id="requestPayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
+                        </details>
+                    </div>
+                    <div class="result-text" id="resultText">
+                        <button class="markdown-toggle-embedded" id="markdownToggle" title="Toggle Markdown Rendering">
+                            <span id="markdownIcon"><i data-lucide="code"></i></span>
+                            <span id="markdownText">Markdown</span>
+                        </button>
+                        <button class="copy-button-embedded" id="copyButton" title="Copy to clipboard">
+                            <i data-lucide="copy"></i>
+                        </button>
+                        <div class="result-text-content" id="resultTextContent"></div>
+                    </div>
+                    <div id="responsePayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
+                        <details style="margin: 0;">
+                            <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary);">// Response payload (debug)</summary>
+                            <pre id="responsePayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
+                        </details>
+                    </div>
+                    <div class="result-history" id="resultHistory"></div>
+                    <button class="prompt-hint" id="promptHint" onclick="expandDrawerToPanel('promptEditor')" title="Open the Prompt Editor">
+                        <i data-lucide="edit-3"></i>
+                        Want to change the prompt? Click here
                     </button>
-                    <button class="copy-button-embedded" id="copyButton" title="Copy to clipboard">
-                        <i data-lucide="copy"></i>
-                    </button>
-                    <div class="result-text-content" id="resultTextContent"></div>
-                </div>
-                <div id="responsePayloadDebug" class="debug-payload-block" style="display: none; margin-top: 8px;">
-                    <details style="margin: 0;">
-                        <summary style="cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary);">// Response payload (debug)</summary>
-                        <pre id="responsePayloadContent" style="margin: 8px 0 0; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 11px; overflow: auto; max-height: 240px; white-space: pre-wrap; word-break: break-all;"></pre>
-                    </details>
                 </div>
             </div>
 

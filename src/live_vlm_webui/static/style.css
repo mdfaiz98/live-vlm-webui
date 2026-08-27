@@ -1642,6 +1642,98 @@ limitations under the License.
             color: var(--text-muted);
         }
 
+        /* Scrollback: keeps the last couple of answers in view instead of
+           hard-replacing the previous one, newest at the top. This is the
+           ONLY scroll container for the card - #vlmResultCard below turns
+           off the generic .result-card resize/overflow so there's a single
+           scrollbar here, not one on the card and one in here too. */
+        .result-scroll {
+            max-height: 480px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        #vlmResultCard {
+            overflow: visible;
+            resize: none;
+        }
+
+        /* Past answers - a slim log line, not a second copy of the answer
+           panel's box/border/shadow, so it doesn't read as a duplicate. */
+        .result-history {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .result-history-entry {
+            display: flex;
+            gap: var(--space-3);
+            align-items: baseline;
+            padding: var(--space-2) 0;
+            margin-top: var(--space-2);
+            border-top: 1px solid var(--border-color);
+            opacity: 0.6;
+        }
+
+        .result-history-entry .result-prompt {
+            flex: 0 0 auto;
+            font-size: var(--font-2xs);
+            font-weight: 400;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            margin: 0;
+            padding: 0;
+            max-width: 35%;
+        }
+
+        .result-history-entry .result-prompt::before {
+            content: '';
+        }
+
+        .result-history-entry .result-text {
+            font-size: var(--font-sm);
+            line-height: 1.5;
+            min-height: 0;
+            margin: 0;
+            padding: 0;
+            background: none;
+            border: none;
+            box-shadow: none;
+            max-width: 100%;
+        }
+
+        /* Small nudge below the answer history, pointing back at the Prompt
+           Editor panel in the sidebar drawer. */
+        .prompt-hint {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-2);
+            width: 100%;
+            margin-top: var(--space-3);
+            padding: var(--space-2) var(--space-3);
+            background: none;
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            font-size: var(--font-xs);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .prompt-hint:hover {
+            color: var(--accent-color);
+            border-color: var(--accent-color);
+            background: var(--bg-tertiary);
+        }
+
+        .prompt-hint .lucide {
+            width: 14px;
+            height: 14px;
+        }
+
         /* VLM readout - a flat panel with a lit left edge, not an AI-gradient chat bubble */
         .result-text {
             font-size: var(--font-xl);
@@ -2329,6 +2421,7 @@ limitations under the License.
 
         /* Input fields - Focus and Apply animations */
         #promptText,
+        #answerLength,
         #maxTokens,
         #processEvery,
         #apiBaseUrl,
@@ -2395,6 +2488,7 @@ limitations under the License.
         }
 
         #promptText.applied,
+        #answerLength.applied,
         #maxTokens.applied,
         #processEvery.applied,
         #apiBaseUrl.applied,
@@ -2403,6 +2497,11 @@ limitations under the License.
         #cameraSelect.applied,
         #rtspUrl.applied {
             animation: settingApplied 0.6s ease-out;
+        }
+
+        #answerLength:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
 
