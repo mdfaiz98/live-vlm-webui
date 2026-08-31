@@ -26,8 +26,10 @@ import signal
 import socket
 import subprocess
 import sys
+import time
 import uuid
 from collections import defaultdict
+from pathlib import Path
 
 import aiohttp
 from aiohttp import web
@@ -44,6 +46,8 @@ from .video_processor import VideoProcessorTrack
 from .gpu_monitor import create_monitor
 from .rtsp_track import RTSPVideoTrack
 from .video_file_track import VideoFileTrack
+from .detector import YoloDetector
+from .detection_processor import DetectionVideoTrack
 
 # Configure logging
 logging.basicConfig(
@@ -59,6 +63,34 @@ websockets = set()  # Track active WebSocket connections (all)
 gpu_monitor = None  # GPU monitoring instance
 gpu_monitor_task = None  # Background task for GPU monitoring
 rtsp_tracks = {}  # Track active RTSP streams {session_id: (rtsp_track, processor_track)}
+
+# Detection cascade demo (/traffic) - deliberately separate from the normal
+# demo's session/VLM machinery above; see CLAUDE.md and
+# VLM_Cascade_Architecture_Plan.md for why this is a standalone page.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+TRAFFIC_MODEL_PATH = _REPO_ROOT / "models" / "yolo26n_det_qcs9075.tflite"
+TRAFFIC_LABELS_PATH = _REPO_ROOT / "models" / "coco_labels.txt"
+TRAFFIC_VIDEO_PATH = _REPO_ROOT / "demo_assets" / "car-highway.mp4"
+yolo_detector = None  # Loaded once at startup (HTP delegate warmup is ~1-2s) - see on_startup
+traffic_websockets = set()  # Track active WebSocket connections for the /traffic page
+# The single-worker detection executor (see detection_processor.py) means
+# multiple simultaneous /traffic connections serialize against each other
+# for NPU access - if a reconnect creates a new connection before the old
+# one is torn down, both compete for that one worker, frame delivery stalls,
+# and WebRTC's own timeout closes the connection, triggering another
+# reconnect (observed as a rapid connect/disconnect loop that eventually
+# crashed the process). This is also just correct behavior for a
+# single-screen kiosk demo: only one active /traffic connection at a time.
+traffic_active_pc = None
+traffic_active_video_track = None
+# Opening/closing PyAV video containers back-to-back with no gap was
+# observed to trigger a native heap-corruption crash ("munmap_chunk():
+# invalid pointer") - this enforces a minimum spacing between /traffic
+# connection setups server-side, independent of client behavior (a client
+# retrying aggressively, e.g. a stale browser tab still running old JS
+# without backoff, can't force the server back into that failure mode).
+traffic_last_offer_time = 0.0
+TRAFFIC_MIN_OFFER_INTERVAL_SECONDS = 2.0
 
 # Multi-session state (0.4.0)
 default_vlm_config = {}  # Set at startup; used to create new sessions
@@ -252,6 +284,185 @@ async def app_script(request):
     path = os.path.join(os.path.dirname(__file__), "static", "app.js")
     content = open(path, "r").read()
     return web.Response(content_type="text/javascript", text=content, headers={"Cache-Control": "no-store"})
+
+
+async def traffic_index(request):
+    """Serve the /traffic cascade demo page - separate from index.html."""
+    content = open(os.path.join(os.path.dirname(__file__), "static", "traffic.html"), "r").read()
+    return web.Response(content_type="text/html", text=content, headers={"Cache-Control": "no-store"})
+
+
+async def traffic_style(request):
+    """Serve the /traffic demo's stylesheet. See app_style() re: no-store."""
+    path = os.path.join(os.path.dirname(__file__), "static", "traffic.css")
+    content = open(path, "r").read()
+    return web.Response(content_type="text/css", text=content, headers={"Cache-Control": "no-store"})
+
+
+async def traffic_script(request):
+    """Serve the /traffic demo's JS. See app_style() re: no-store."""
+    path = os.path.join(os.path.dirname(__file__), "static", "traffic.js")
+    content = open(path, "r").read()
+    return web.Response(content_type="text/javascript", text=content, headers={"Cache-Control": "no-store"})
+
+
+def broadcast_traffic_detections(tracks, crops, frame_width, frame_height):
+    """Send newly-confirmed vehicle sightings (with cropped thumbnails) to
+    all connected /traffic WebSocket clients - called once per vehicle, the
+    first time the tracker confirms it (see tracker.py), not once per frame."""
+    objects = [
+        {
+            "id": t.id,
+            "label": t.label,
+            "score": round(t.best_score, 3),
+            "bbox": list(t.best_bbox),
+            "crop": crop_b64,
+        }
+        for t, crop_b64 in zip(tracks, crops)
+    ]
+    message = json.dumps({"type": "new_detections", "objects": objects})
+    for ws in list(traffic_websockets):
+        try:
+            asyncio.create_task(ws.send_str(message))
+        except Exception as e:
+            logger.error(f"Error broadcasting traffic detection: {e}")
+
+
+async def traffic_websocket_handler(request):
+    """WebSocket for the /traffic demo - detection results, plus pause/resume
+    control of the video source (see VideoFileTrack.pause/resume). No
+    prompt/model/session machinery; that's the normal demo's concern."""
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+    traffic_websockets.add(ws)
+    logger.info(f"Traffic WebSocket client connected, total: {len(traffic_websockets)}")
+
+    try:
+        await ws.send_json({"type": "status", "text": "Connected to traffic demo"})
+        async for msg in ws:
+            if msg.type == web.WSMsgType.TEXT:
+                try:
+                    data = json.loads(msg.data)
+                except json.JSONDecodeError:
+                    continue
+                msg_type = data.get("type")
+                if msg_type in ("pause", "resume") and traffic_active_video_track:
+                    getattr(traffic_active_video_track, msg_type)()
+            elif msg.type == web.WSMsgType.ERROR:
+                logger.error(f"Traffic WebSocket error: {ws.exception()}")
+    finally:
+        traffic_websockets.discard(ws)
+        logger.info(f"Traffic WebSocket client disconnected, total: {len(traffic_websockets)}")
+
+    return ws
+
+
+async def traffic_offer(request):
+    """Handle WebRTC offer for the /traffic cascade demo. Always uses the
+    looping car-highway.mp4 clip wrapped with object detection - no
+    webcam/RTSP/session selection. Kept deliberately separate from the
+    normal demo's offer()/VLM flow (see CLAUDE.md)."""
+    if yolo_detector is None:
+        return web.Response(
+            status=503,
+            content_type="application/json",
+            text=json.dumps(
+                {"error": "Detection model not available - check server startup logs"}
+            ),
+        )
+
+    global traffic_active_pc, traffic_active_video_track, traffic_last_offer_time
+
+    # Rate-limit connection setup itself (see TRAFFIC_MIN_OFFER_INTERVAL_SECONDS
+    # comment above) - protects the server even if a client hammers this
+    # endpoint (e.g. a stale tab stuck retrying every few seconds).
+    now = time.monotonic()
+    elapsed = now - traffic_last_offer_time
+    if elapsed < TRAFFIC_MIN_OFFER_INTERVAL_SECONDS:
+        await asyncio.sleep(TRAFFIC_MIN_OFFER_INTERVAL_SECONDS - elapsed)
+    traffic_last_offer_time = time.monotonic()
+
+    # Close any existing /traffic connection first (see traffic_active_pc
+    # comment above) - a page reload should cleanly supersede the old
+    # connection, never run alongside it.
+    #
+    # NOTE: closing the old pc/video track synchronously here, immediately
+    # before opening a new VideoFileTrack on the same file, was observed to
+    # trigger a native heap-corruption crash ("munmap_chunk(): invalid
+    # pointer") under rapid reconnect churn - almost certainly a PyAV/libav
+    # thread-safety issue with tearing down and standing up decode contexts
+    # for the same file back-to-back with no gap. Stopping the old track and
+    # yielding back to the event loop before continuing gives its native
+    # cleanup a chance to finish first.
+    if traffic_active_pc is not None:
+        logger.info("[traffic] New connection superseding existing one - closing old first")
+        old_pc, old_track = traffic_active_pc, traffic_active_video_track
+        traffic_active_pc, traffic_active_video_track = None, None
+        if old_track:
+            old_track.stop()
+        pcs.discard(old_pc)
+        await old_pc.close()
+        await asyncio.sleep(0.2)
+
+    params = await request.json()
+    offer_sdp = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+
+    config = RTCConfiguration(iceServers=[])
+    pc = RTCPeerConnection(configuration=config)
+    pcs.add(pc)
+    traffic_active_pc = pc
+
+    video_cleanup_track = None
+
+    @pc.on("connectionstatechange")
+    async def on_connectionstatechange():
+        global traffic_active_pc, traffic_active_video_track
+        logger.info(f"[traffic] Connection state: {pc.connectionState}")
+        if pc.connectionState in ["failed", "closed"]:
+            if video_cleanup_track:
+                video_cleanup_track.stop()
+            await pc.close()
+            pcs.discard(pc)
+            if traffic_active_pc is pc:
+                traffic_active_pc = None
+                traffic_active_video_track = None
+
+    try:
+        video_track = VideoFileTrack(str(TRAFFIC_VIDEO_PATH), loop=True)
+        video_cleanup_track = video_track
+        traffic_active_video_track = video_track
+    except Exception as e:
+        logger.error(f"[traffic] Failed to open demo video: {e}")
+        return web.Response(
+            status=500,
+            content_type="application/json",
+            text=json.dumps({"error": f"Failed to open demo video: {str(e)}"}),
+        )
+
+    # buffered=False: keep only the latest frame, don't queue every frame the
+    # relay pulls. DetectionVideoTrack does real per-frame work (NPU
+    # inference + drawing + re-encoding) that can run slightly behind 30fps,
+    # and the default buffered=True relay queue is unbounded - a backlog of
+    # stale frames would build up over time, and pause() would then have to
+    # drain that whole backlog (showing "old" motion) before actually
+    # freezing. Dropping stale frames instead is also just correct for a
+    # real-time low-latency pipeline like this one.
+    relayed_video = relay.subscribe(video_track, buffered=False)
+    processor_track = DetectionVideoTrack(
+        relayed_video, yolo_detector, detection_callback=broadcast_traffic_detections
+    )
+    pc.addTrack(processor_track)
+
+    await pc.setRemoteDescription(offer_sdp)
+    answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
+
+    logger.info("[traffic] Created answer for traffic demo peer connection")
+
+    return web.Response(
+        content_type="application/json",
+        text=json.dumps({"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}),
+    )
 
 
 async def models(request):
@@ -1008,7 +1219,7 @@ async def _stop_rtsp_session(session_id: str):
 
 async def on_startup(app):
     """Initialize resources on server startup"""
-    global gpu_monitor, gpu_monitor_task
+    global gpu_monitor, gpu_monitor_task, yolo_detector
 
     # Initialize GPU monitor
     try:
@@ -1022,6 +1233,27 @@ async def on_startup(app):
     if gpu_monitor:
         gpu_monitor_task = asyncio.create_task(gpu_monitor_loop())
         logger.info("GPU monitoring task started")
+
+    # Load the /traffic cascade demo's detection model once at startup (HTP
+    # delegate warmup is ~1-2s - see YoloDetector). A missing model/video
+    # only disables /traffic; it must never take down the normal demo.
+    if TRAFFIC_MODEL_PATH.exists() and TRAFFIC_LABELS_PATH.exists():
+        try:
+            yolo_detector = YoloDetector(
+                model_path=str(TRAFFIC_MODEL_PATH),
+                labels_path=str(TRAFFIC_LABELS_PATH),
+                backend="htp",
+            )
+            logger.info("Traffic detection model loaded - /traffic demo ready")
+        except Exception as e:
+            logger.error(f"Failed to load traffic detection model: {e}")
+            yolo_detector = None
+    else:
+        logger.warning(
+            f"Traffic detection model not found at {TRAFFIC_MODEL_PATH} - "
+            "/traffic demo will be unavailable until it's exported (see demo_documentation.md)"
+        )
+        yolo_detector = None
 
 
 async def on_shutdown(app):
@@ -1050,6 +1282,11 @@ async def on_shutdown(app):
     websockets.clear()
     session_websockets.clear()
     ws_to_session.clear()
+
+    # Close /traffic demo websockets
+    for ws in list(traffic_websockets):
+        await ws.close()
+    traffic_websockets.clear()
 
     # Close all RTSP streams
     for session_id in list(rtsp_tracks.keys()):
@@ -1083,6 +1320,13 @@ async def create_app(test_mode=False):
     app.router.add_get("/detect-services", detect_services)
     app.router.add_get("/ws", websocket_handler)
     app.router.add_post("/offer", offer)
+
+    # /traffic cascade demo - separate page/pipeline from the normal demo above
+    app.router.add_get("/traffic", traffic_index)
+    app.router.add_get("/traffic.css", traffic_style)
+    app.router.add_get("/traffic.js", traffic_script)
+    app.router.add_get("/api/traffic/ws", traffic_websocket_handler)
+    app.router.add_post("/api/traffic/offer", traffic_offer)
 
     # RTSP endpoints
     app.router.add_post("/api/rtsp/start", rtsp_start)

@@ -1,0 +1,79 @@
+<!--
+SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: Apache-2.0
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Traffic monitoring cascade demo - detection (YOLO26, Hexagon NPU) feeding a
+bounding-box overlay + tracked-objects panel. Deliberately a separate page
+from index.html; see CLAUDE.md and VLM_Cascade_Architecture_Plan.md.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advantech Traffic Monitoring Demo</title>
+
+    <link rel="icon" type="image/svg+xml" href="favicon/favicon.svg">
+    <link rel="icon" type="image/x-icon" href="favicon/favicon.ico">
+    <link rel="icon" type="image/png" sizes="96x96" href="favicon/favicon-96x96.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
+
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/traffic.css">
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div class="logo" style="display: flex; align-items: center;">
+                <img src="/images/advantech-logo.png" alt="Advantech" style="height: 70px; width: auto; display: block; margin: -13px 0;">
+            </div>
+            <div class="title-section">
+                <h1>Traffic Monitoring</h1>
+                <div class="subtitle">Detection &rarr; VLM Cascade Demo</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <span class="status-badge disconnected" id="connectionStatus">Disconnected</span>
+            <button class="traffic-toggle-btn" id="toggleBtn">Stop</button>
+        </div>
+    </div>
+
+    <div class="traffic-layout">
+        <div class="video-panel">
+            <div class="video-wrap" id="videoWrap">
+                <video id="trafficVideo" autoplay muted playsinline></video>
+                <div class="fps-counter" id="fpsCounter">-- FPS</div>
+                <button class="play-pause-btn" id="playPauseBtn" aria-label="Pause" title="Pause">&#10074;&#10074;</button>
+                <div class="loading-overlay" id="loadingOverlay">Connecting...</div>
+            </div>
+            <div class="video-caption">
+                Vehicles detected on-device (YOLO26n, Hexagon NPU)
+            </div>
+        </div>
+
+        <div class="tracked-panel">
+            <div class="tracked-panel-header">
+                <span>Detected Vehicles</span>
+                <span class="tracked-count" id="trackedCount">0</span>
+            </div>
+            <div class="tracked-list" id="trackedList">
+                <div class="tracked-empty">Waiting for detections...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/traffic.js"></script>
+</body>
+</html>

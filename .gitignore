@@ -75,6 +75,11 @@ ENV/
 # E2E test data (large video files)
 tests/e2e/.test-data/
 
+# Detection cascade: exported model (regenerate via qai-hub-models export,
+# see demo_documentation.md) and demo video assets - not committed, binary/large
+models/
+demo_assets/
+
 # SSL certificates (sensitive)
 cert.pem
 key.pem
