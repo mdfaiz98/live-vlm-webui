@@ -66,11 +66,32 @@ from index.html; see CLAUDE.md and VLM_Cascade_Architecture_Plan.md.
         <div class="tracked-panel">
             <div class="tracked-panel-header">
                 <span>Detected Vehicles</span>
-                <span class="tracked-count" id="trackedCount">0</span>
+                <div class="tracked-panel-header-right">
+                    <span class="tracked-count" id="trackedCount">0</span>
+                    <button class="edit-prompt-btn" id="editPromptBtn" title="Edit the description prompt">&#9998; Prompt</button>
+                </div>
+            </div>
+            <div class="prompt-edit-area hidden" id="promptEditArea">
+                <textarea id="promptEditTextarea" rows="4"></textarea>
+                <div class="prompt-edit-actions">
+                    <button class="prompt-action-btn primary" id="promptSaveBtn">Save</button>
+                    <button class="prompt-action-btn" id="promptResetBtn">Reset to default</button>
+                    <button class="prompt-action-btn" id="promptCancelBtn">Cancel</button>
+                </div>
             </div>
             <div class="tracked-list" id="trackedList">
                 <div class="tracked-empty">Waiting for detections...</div>
             </div>
+        </div>
+    </div>
+
+    <div class="detail-modal-backdrop hidden" id="detailModalBackdrop">
+        <div class="detail-modal">
+            <button class="detail-modal-close" id="detailModalClose" aria-label="Close">&times;</button>
+            <img class="detail-modal-img" id="detailModalImg" alt="">
+            <div class="detail-modal-label" id="detailModalLabel"></div>
+            <div class="detail-modal-score" id="detailModalScore"></div>
+            <div class="detail-modal-caption-area" id="detailModalCaptionArea"></div>
         </div>
     </div>
 

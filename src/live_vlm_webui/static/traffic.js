@@ -17,6 +17,12 @@
     const toggleBtn = document.getElementById('toggleBtn');
     const fpsCounter = document.getElementById('fpsCounter');
     const playPauseBtn = document.getElementById('playPauseBtn');
+    const editPromptBtn = document.getElementById('editPromptBtn');
+    const promptEditArea = document.getElementById('promptEditArea');
+    const promptEditTextarea = document.getElementById('promptEditTextarea');
+    const promptSaveBtn = document.getElementById('promptSaveBtn');
+    const promptResetBtn = document.getElementById('promptResetBtn');
+    const promptCancelBtn = document.getElementById('promptCancelBtn');
 
     let peerConnection = null;
     let ws = null;
@@ -40,6 +46,12 @@
     const MAX_HISTORY = 40;
     let history = [];
     let totalDetectionCount = 0;
+
+    // Click-to-caption prompt - server-authoritative (see traffic_caption_prompt
+    // in server.py), synced in on the initial "status" message and whenever
+    // update_prompt is broadcast (including our own edits, echoed back).
+    let currentPrompt = '';
+    let defaultPrompt = '';
 
     function updateStatus(text, state) {
         connectionStatus.textContent = text;
@@ -68,6 +80,12 @@
         fpsCounter.textContent = 'FPS n/a';
     }
 
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : str;
+        return div.innerHTML;
+    }
+
     function renderHistory() {
         trackedCount.textContent = totalDetectionCount;
 
@@ -81,17 +99,121 @@
                 const thumb = obj.crop
                     ? `<img class="tracked-item-thumb" src="data:image/jpeg;base64,${obj.crop}" alt="${obj.label}">`
                     : `<div class="tracked-item-thumb"></div>`;
+
+                const tag =
+                    obj.captionStatus === 'done'
+                        ? `<span class="tracked-item-tag">&#10003; Described</span>`
+                        : obj.captionStatus === 'pending'
+                          ? `<span class="tracked-item-tag">Describing...</span>`
+                          : '';
+
                 return `
-                <div class="tracked-item">
+                <div class="tracked-item" data-id="${obj.id}">
                     ${thumb}
                     <div class="tracked-item-info">
-                        <span class="tracked-item-label">${obj.label}</span>
+                        <span class="tracked-item-label">${escapeHtml(obj.label)}</span>
                         <span class="tracked-item-score">${(obj.score * 100).toFixed(0)}% confidence</span>
+                        ${tag}
                     </div>
                 </div>`;
             })
             .join('');
     }
+
+    // Event delegation on the (re-rendered) list container, so click
+    // handling survives renderHistory() replacing the list's innerHTML.
+    // Clicking a card opens the detail modal (see below) rather than
+    // captioning inline - inline captions got visually cramped/pushed
+    // around as new cards keep arriving while the video runs.
+    trackedList.addEventListener('click', (event) => {
+        const card = event.target.closest('.tracked-item');
+        if (card) openModal(card.dataset.id);
+    });
+
+    // --- Detail modal: larger image + Describe action ---
+    const detailModalBackdrop = document.getElementById('detailModalBackdrop');
+    const detailModalImg = document.getElementById('detailModalImg');
+    const detailModalLabel = document.getElementById('detailModalLabel');
+    const detailModalScore = document.getElementById('detailModalScore');
+    const detailModalCaptionArea = document.getElementById('detailModalCaptionArea');
+    const detailModalClose = document.getElementById('detailModalClose');
+    let openModalId = null;
+
+    function requestCaption(id) {
+        const entry = history.find((h) => h.id === id);
+        if (entry) {
+            entry.captionStatus = 'pending';
+            renderHistory();
+            if (openModalId === id) renderModalContent();
+        }
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'request_caption', id }));
+        }
+    }
+
+    function renderModalContent() {
+        const entry = history.find((h) => h.id === openModalId);
+        if (!entry) return;
+
+        const modalImg = entry.crop_large || entry.crop;
+        detailModalImg.src = modalImg ? `data:image/jpeg;base64,${modalImg}` : '';
+        detailModalImg.alt = entry.label;
+        detailModalLabel.textContent = entry.label;
+        detailModalScore.textContent = `${(entry.score * 100).toFixed(0)}% confidence`;
+
+        if (entry.captionStatus === 'pending') {
+            detailModalCaptionArea.innerHTML = `<div class="tracked-item-caption pending">Describing...</div>`;
+        } else if (entry.captionStatus === 'done') {
+            detailModalCaptionArea.innerHTML = `<div class="tracked-item-caption">${escapeHtml(entry.caption)}</div>`;
+        } else if (entry.captionStatus === 'error') {
+            detailModalCaptionArea.innerHTML = `<div class="tracked-item-caption error">${escapeHtml(entry.caption) || 'Failed'}</div><button class="describe-btn" id="modalDescribeBtn">Retry</button>`;
+        } else {
+            detailModalCaptionArea.innerHTML = `<button class="describe-btn" id="modalDescribeBtn">Describe</button>`;
+        }
+
+        const btn = document.getElementById('modalDescribeBtn');
+        if (btn) btn.addEventListener('click', () => requestCaption(entry.id));
+    }
+
+    function openModal(id) {
+        openModalId = id;
+        renderModalContent();
+        detailModalBackdrop.classList.remove('hidden');
+    }
+
+    function closeModal() {
+        openModalId = null;
+        detailModalBackdrop.classList.add('hidden');
+    }
+
+    // Click outside the modal content (i.e. directly on the backdrop) closes it.
+    detailModalBackdrop.addEventListener('click', (event) => {
+        if (event.target === detailModalBackdrop) closeModal();
+    });
+    detailModalClose.addEventListener('click', closeModal);
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && openModalId) closeModal();
+    });
+
+    // --- Prompt editing: applies to future "Describe" clicks, server-side
+    // and shared across any connected viewers (see traffic_caption_prompt).
+    editPromptBtn.addEventListener('click', () => {
+        promptEditTextarea.value = currentPrompt;
+        promptEditArea.classList.remove('hidden');
+    });
+    promptCancelBtn.addEventListener('click', () => {
+        promptEditArea.classList.add('hidden');
+    });
+    promptResetBtn.addEventListener('click', () => {
+        promptEditTextarea.value = defaultPrompt;
+    });
+    promptSaveBtn.addEventListener('click', () => {
+        const newPrompt = promptEditTextarea.value.trim();
+        if (newPrompt && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'update_prompt', prompt: newPrompt }));
+        }
+        promptEditArea.classList.add('hidden');
+    });
 
     function connectWebSocket() {
         const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -108,6 +230,22 @@
                     history = history.slice(0, MAX_HISTORY);
                 }
                 renderHistory();
+            } else if (data.type === 'caption_status') {
+                const entry = history.find((h) => h.id === data.id);
+                if (entry) {
+                    entry.captionStatus = data.status; // 'pending' | 'done' | 'error'
+                    entry.caption = data.caption;
+                    renderHistory();
+                    if (openModalId === data.id) renderModalContent();
+                }
+            } else if (data.type === 'status') {
+                currentPrompt = data.prompt || '';
+                defaultPrompt = data.default_prompt || '';
+            } else if (data.type === 'prompt_updated') {
+                currentPrompt = data.prompt || '';
+                if (!promptEditArea.classList.contains('hidden')) {
+                    promptEditTextarea.value = currentPrompt;
+                }
             }
         };
 

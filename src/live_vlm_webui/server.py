@@ -28,10 +28,12 @@ import subprocess
 import sys
 import time
 import uuid
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from pathlib import Path
+from typing import Optional
 
 import aiohttp
+import cv2
 from aiohttp import web
 from aiortc import (
     RTCPeerConnection,
@@ -40,6 +42,7 @@ from aiortc import (
     RTCIceServer,
 )
 from aiortc.contrib.media import MediaRelay
+from PIL import Image
 
 from .vlm_service import VLMService
 from .video_processor import VideoProcessorTrack
@@ -91,6 +94,34 @@ traffic_active_video_track = None
 # without backoff, can't force the server back into that failure mode).
 traffic_last_offer_time = 0.0
 TRAFFIC_MIN_OFFER_INTERVAL_SECONDS = 2.0
+
+# Phase 3: click-to-caption. traffic_vlm_service is a dedicated VLMService
+# instance (separate cooldown/lock state from the main demo's, but pointed
+# at the same GenieX server underneath) used only for per-vehicle captions,
+# never for continuous full-frame analysis. traffic_track_store retains each
+# reported vehicle's full-resolution crop (NOT the shrunk display thumbnail
+# broadcast to the panel) keyed by track id, since a click can arrive well
+# after tracker.py's own Track object has expired/been GC'd; capped and
+# FIFO-evicted so a long-running demo can't grow this unboundedly.
+traffic_vlm_service: Optional[VLMService] = None
+traffic_track_store: "OrderedDict[str, dict]" = OrderedDict()
+TRAFFIC_TRACK_STORE_MAX = 200
+TRAFFIC_CAPTION_DEFAULT_PROMPT = (
+    "Describe this vehicle in 1-2 sentences: its color, type (car/truck/bus/etc.), "
+    "and brand if visible. Only mention the license plate if it is clearly legible - "
+    "don't guess at characters you can't read clearly."
+)
+# The active prompt - editable at runtime from the /traffic page (see
+# "update_prompt" in traffic_websocket_handler); TRAFFIC_CAPTION_DEFAULT_PROMPT
+# above stays fixed as the "Reset to default" target.
+traffic_caption_prompt = TRAFFIC_CAPTION_DEFAULT_PROMPT
+TRAFFIC_CAPTION_MAX_TOKENS = 120
+# Mirrors vlm_service.py's own cooldown - see CLAUDE.md: without this, a
+# GenieX stall causes request pile-up (each new caption request queues up
+# behind an abandoned one, accelerating delays and "broken pipe" errors).
+TRAFFIC_CAPTION_FAILURE_COOLDOWN_SECONDS = 40.0
+traffic_caption_last_failure_at: Optional[float] = None
+traffic_caption_lock = asyncio.Lock()
 
 # Multi-session state (0.4.0)
 default_vlm_config = {}  # Set at startup; used to create new sessions
@@ -306,10 +337,16 @@ async def traffic_script(request):
     return web.Response(content_type="text/javascript", text=content, headers={"Cache-Control": "no-store"})
 
 
-def broadcast_traffic_detections(tracks, crops, frame_width, frame_height):
+def broadcast_traffic_detections(tracks, crops, crops_large, frame_width, frame_height):
     """Send newly-confirmed vehicle sightings (with cropped thumbnails) to
     all connected /traffic WebSocket clients - called once per vehicle, the
-    first time the tracker confirms it (see tracker.py), not once per frame."""
+    first time the tracker confirms it (see tracker.py), not once per frame.
+
+    Two display sizes are sent: a small "crop" for the panel list, and a
+    larger "crop_large" for the click-to-open detail modal - both are still
+    below the full-resolution crop the VLM itself analyzes (retained
+    separately in traffic_track_store), which is why the VLM can sometimes
+    make out detail (e.g. plate text) a viewer can't see in the modal."""
     objects = [
         {
             "id": t.id,
@@ -317,9 +354,23 @@ def broadcast_traffic_detections(tracks, crops, frame_width, frame_height):
             "score": round(t.best_score, 3),
             "bbox": list(t.best_bbox),
             "crop": crop_b64,
+            "crop_large": crop_large_b64,
         }
-        for t, crop_b64 in zip(tracks, crops)
+        for t, crop_b64, crop_large_b64 in zip(tracks, crops, crops_large)
     ]
+
+    for t in tracks:
+        traffic_track_store[t.id] = {
+            "label": t.label,
+            "score": t.best_score,
+            "best_crop": t.best_crop,  # full-res ndarray, not the shrunk thumbnail
+            "caption": None,
+            "caption_pending": False,
+        }
+        traffic_track_store.move_to_end(t.id)
+    while len(traffic_track_store) > TRAFFIC_TRACK_STORE_MAX:
+        traffic_track_store.popitem(last=False)
+
     message = json.dumps({"type": "new_detections", "objects": objects})
     for ws in list(traffic_websockets):
         try:
@@ -328,17 +379,89 @@ def broadcast_traffic_detections(tracks, crops, frame_width, frame_height):
             logger.error(f"Error broadcasting traffic detection: {e}")
 
 
+def broadcast_traffic_caption_status(track_id, status, caption=None):
+    """Send a caption_pending/caption_result/caption_error update for one
+    vehicle to all connected /traffic WebSocket clients."""
+    message = json.dumps({"type": "caption_status", "id": track_id, "status": status, "caption": caption})
+    for ws in list(traffic_websockets):
+        try:
+            asyncio.create_task(ws.send_str(message))
+        except Exception as e:
+            logger.error(f"Error broadcasting traffic caption status: {e}")
+
+
+async def caption_traffic_vehicle(track_id: str):
+    """Generate a VLM caption for one previously-detected vehicle's stored
+    crop, on demand (click-to-caption). Serialized via traffic_caption_lock
+    (one caption call at a time) and respects the same failure-cooldown
+    pattern as vlm_service.py, to protect against GenieX request pile-up
+    after a stall (see CLAUDE.md)."""
+    global traffic_caption_last_failure_at
+
+    entry = traffic_track_store.get(track_id)
+    if entry is None:
+        logger.debug(f"[traffic] Caption requested for unknown/expired track {track_id}")
+        return
+    if entry["caption"] is not None or entry["caption_pending"]:
+        return  # already captioned or already in flight
+    if traffic_vlm_service is None:
+        broadcast_traffic_caption_status(track_id, "error", "Captioning unavailable")
+        return
+
+    if traffic_caption_last_failure_at is not None:
+        elapsed = time.time() - traffic_caption_last_failure_at
+        if elapsed < TRAFFIC_CAPTION_FAILURE_COOLDOWN_SECONDS:
+            logger.info(
+                f"[traffic] In cooldown after a recent VLM failure "
+                f"({elapsed:.0f}s / {TRAFFIC_CAPTION_FAILURE_COOLDOWN_SECONDS:.0f}s), "
+                f"skipping caption request for {track_id}"
+            )
+            broadcast_traffic_caption_status(track_id, "error", "Busy, try again shortly")
+            return
+
+    if traffic_caption_lock.locked():
+        broadcast_traffic_caption_status(track_id, "error", "Busy, try again shortly")
+        return
+
+    entry["caption_pending"] = True
+    broadcast_traffic_caption_status(track_id, "pending")
+
+    async with traffic_caption_lock:
+        try:
+            image = Image.fromarray(cv2.cvtColor(entry["best_crop"], cv2.COLOR_BGR2RGB))
+            caption = await traffic_vlm_service.analyze_image(image, prompt=traffic_caption_prompt)
+            if caption.startswith("Error:"):
+                raise RuntimeError(caption)
+            entry["caption"] = caption
+            entry["caption_pending"] = False
+            broadcast_traffic_caption_status(track_id, "done", caption)
+        except Exception as e:
+            logger.error(f"[traffic] Caption failed for {track_id}: {e}")
+            traffic_caption_last_failure_at = time.time()
+            entry["caption_pending"] = False
+            broadcast_traffic_caption_status(track_id, "error", "Description failed")
+
+
 async def traffic_websocket_handler(request):
     """WebSocket for the /traffic demo - detection results, plus pause/resume
-    control of the video source (see VideoFileTrack.pause/resume). No
-    prompt/model/session machinery; that's the normal demo's concern."""
+    control of the video source (see VideoFileTrack.pause/resume) and
+    editing the click-to-caption prompt. No per-session prompt/model
+    machinery like the main demo's /ws; that's the normal demo's concern."""
+    global traffic_caption_prompt
     ws = web.WebSocketResponse()
     await ws.prepare(request)
     traffic_websockets.add(ws)
     logger.info(f"Traffic WebSocket client connected, total: {len(traffic_websockets)}")
 
     try:
-        await ws.send_json({"type": "status", "text": "Connected to traffic demo"})
+        await ws.send_json(
+            {
+                "type": "status",
+                "text": "Connected to traffic demo",
+                "prompt": traffic_caption_prompt,
+                "default_prompt": TRAFFIC_CAPTION_DEFAULT_PROMPT,
+            }
+        )
         async for msg in ws:
             if msg.type == web.WSMsgType.TEXT:
                 try:
@@ -348,6 +471,24 @@ async def traffic_websocket_handler(request):
                 msg_type = data.get("type")
                 if msg_type in ("pause", "resume") and traffic_active_video_track:
                     getattr(traffic_active_video_track, msg_type)()
+                elif msg_type == "request_caption":
+                    track_id = data.get("id")
+                    if track_id:
+                        asyncio.create_task(caption_traffic_vehicle(track_id))
+                elif msg_type == "update_prompt":
+                    new_prompt = (data.get("prompt") or "").strip()
+                    if new_prompt:
+                        traffic_caption_prompt = new_prompt
+                        logger.info(f"[traffic] Caption prompt updated: {new_prompt!r}")
+                        for other_ws in list(traffic_websockets):
+                            try:
+                                asyncio.create_task(
+                                    other_ws.send_json(
+                                        {"type": "prompt_updated", "prompt": traffic_caption_prompt}
+                                    )
+                                )
+                            except Exception as e:
+                                logger.error(f"Error broadcasting prompt update: {e}")
             elif msg.type == web.WSMsgType.ERROR:
                 logger.error(f"Traffic WebSocket error: {ws.exception()}")
     finally:
@@ -1219,7 +1360,7 @@ async def _stop_rtsp_session(session_id: str):
 
 async def on_startup(app):
     """Initialize resources on server startup"""
-    global gpu_monitor, gpu_monitor_task, yolo_detector
+    global gpu_monitor, gpu_monitor_task, yolo_detector, traffic_vlm_service
 
     # Initialize GPU monitor
     try:
@@ -1254,6 +1395,22 @@ async def on_startup(app):
             "/traffic demo will be unavailable until it's exported (see demo_documentation.md)"
         )
         yolo_detector = None
+
+    # Dedicated VLM client for /traffic click-to-caption - same GenieX
+    # server as the main demo (default_vlm_config), but its own instance so
+    # its cooldown/busy state never interferes with the main demo's.
+    try:
+        traffic_vlm_service = VLMService(
+            model=default_vlm_config.get("model", "meta/llama-3.2-11b-vision-instruct"),
+            api_base=default_vlm_config.get("api_base", "http://localhost:8000/v1"),
+            api_key=default_vlm_config.get("api_key", "EMPTY"),
+            prompt=TRAFFIC_CAPTION_DEFAULT_PROMPT,
+            max_tokens=TRAFFIC_CAPTION_MAX_TOKENS,
+        )
+        logger.info("Traffic caption VLM service initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize traffic caption VLM service: {e}")
+        traffic_vlm_service = None
 
 
 async def on_shutdown(app):

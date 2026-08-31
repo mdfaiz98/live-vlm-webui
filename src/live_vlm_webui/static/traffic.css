@@ -143,6 +143,84 @@
     color: var(--text-primary);
 }
 
+.tracked-panel-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.edit-prompt-btn {
+    font-size: var(--font-xs);
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 3px 8px;
+    cursor: pointer;
+}
+
+.edit-prompt-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-border-soft);
+}
+
+.prompt-edit-area {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.prompt-edit-area.hidden {
+    display: none;
+}
+
+#promptEditTextarea {
+    width: 100%;
+    resize: vertical;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px;
+    font-size: var(--font-sm);
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.prompt-edit-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.prompt-action-btn {
+    font-size: var(--font-xs);
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.prompt-action-btn:hover {
+    background: var(--card-hover);
+}
+
+.prompt-action-btn.primary {
+    background: var(--advantech-navy);
+    border-color: var(--advantech-navy);
+    color: #fff;
+}
+
+.prompt-action-btn.primary:hover {
+    background: var(--advantech-navy-light);
+}
+
 .tracked-count {
     background: var(--accent-soft);
     color: var(--text-primary);
@@ -204,4 +282,136 @@
     color: var(--text-secondary);
     font-size: var(--font-sm);
     font-variant-numeric: tabular-nums;
+}
+
+.describe-btn {
+    align-self: flex-start;
+    margin-top: 2px;
+    padding: 3px 10px;
+    font-size: var(--font-xs);
+    font-weight: 600;
+    color: var(--text-primary);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-border-soft);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.describe-btn:hover {
+    background: var(--accent-color);
+    color: #fff;
+}
+
+.tracked-item-caption {
+    font-size: var(--font-sm);
+    color: var(--text-primary);
+    line-height: 1.4;
+    margin-top: 2px;
+}
+
+.tracked-item-caption.pending {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.tracked-item-caption.error {
+    color: var(--error-color);
+}
+
+.tracked-item-caption.error .describe-btn {
+    margin-top: 0;
+    margin-left: 6px;
+}
+
+.tracked-item {
+    cursor: pointer;
+}
+
+.tracked-item:hover {
+    border-color: var(--accent-border-soft);
+}
+
+.tracked-item-tag {
+    font-size: var(--font-2xs);
+    color: var(--ring-cpu-color);
+    font-weight: 600;
+}
+
+.detail-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.detail-modal-backdrop.hidden {
+    display: none;
+}
+
+.detail-modal {
+    position: relative;
+    width: min(90vw, 460px);
+    max-height: 85vh;
+    overflow-y: auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: var(--card-shadow);
+}
+
+.detail-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 50%;
+    color: var(--text-primary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.detail-modal-close:hover {
+    background: var(--card-hover);
+}
+
+.detail-modal-img {
+    width: 100%;
+    max-height: 320px;
+    object-fit: contain;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    margin-bottom: 14px;
+}
+
+.detail-modal-label {
+    font-size: var(--font-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: capitalize;
+}
+
+.detail-modal-score {
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.detail-modal-caption-area .describe-btn {
+    font-size: var(--font-base);
+    padding: 8px 18px;
+}
+
+.detail-modal-caption-area .tracked-item-caption {
+    font-size: var(--font-base);
 }

@@ -49,7 +49,8 @@ logger = logging.getLogger(__name__)
 
 BOX_COLOR = (35, 226, 138)  # BGR - matches the UI's --ring-cpu-color green
 LABEL_TEXT_COLOR = (10, 12, 10)
-CROP_THUMBNAIL_MAX_DIM = 160
+CROP_THUMBNAIL_MAX_DIM = 160  # small panel-list thumbnail
+CROP_MODAL_MAX_DIM = 480  # larger crop for the click-to-open detail modal
 CROP_JPEG_QUALITY = 80
 
 # The TFLite/QNN HTP interpreter backing YoloDetector is a single shared
@@ -70,7 +71,9 @@ class DetectionVideoTrack(VideoStreamTrack):
         self,
         track: VideoStreamTrack,
         detector: YoloDetector,
-        detection_callback: Optional[Callable[[List[Track], List[Optional[str]], int, int], None]] = None,
+        detection_callback: Optional[
+            Callable[[List[Track], List[Optional[str]], List[Optional[str]], int, int], None]
+        ] = None,
     ):
         super().__init__()
         self.track = track
@@ -109,9 +112,9 @@ class DetectionVideoTrack(VideoStreamTrack):
 
             ready_tracks = self.tracker.update(detections, img)
             if self.detection_callback and ready_tracks:
-                crops = self._encode_crops(ready_tracks)
+                crops, crops_large = self._encode_crops(ready_tracks)
                 h, w = img.shape[:2]
-                self.detection_callback(ready_tracks, crops, w, h)
+                self.detection_callback(ready_tracks, crops, crops_large, w, h)
 
             new_frame = av.VideoFrame.from_ndarray(annotated, format="bgr24")
             new_frame.pts = frame.pts
@@ -155,23 +158,35 @@ class DetectionVideoTrack(VideoStreamTrack):
             )
         return annotated
 
-    def _encode_crops(self, tracks: List[Track]) -> List[Optional[str]]:
+    def _encode_crops(
+        self, tracks: List[Track]
+    ) -> tuple[List[Optional[str]], List[Optional[str]]]:
         """Resize + JPEG/base64 encode each track's already-captured best_crop
         (pixels grabbed at the moment tracker.update() saw that track's peak
-        size, on whichever frame that was - not re-cropped here)."""
-        crops: List[Optional[str]] = []
+        size, on whichever frame that was - not re-cropped here) at two
+        sizes: a small thumbnail for the panel list, and a larger version
+        for the click-to-open detail modal. Both are still well below the
+        full-res crop the VLM itself sees (see server.py's
+        traffic_track_store) - the modal is for a human to look at, not to
+        match the VLM's input exactly."""
+        thumbs: List[Optional[str]] = []
+        larges: List[Optional[str]] = []
         for t in tracks:
             if t.best_crop is None or t.best_crop.size == 0:
-                crops.append(None)
+                thumbs.append(None)
+                larges.append(None)
                 continue
+            thumbs.append(self._resize_and_encode(t.best_crop, CROP_THUMBNAIL_MAX_DIM))
+            larges.append(self._resize_and_encode(t.best_crop, CROP_MODAL_MAX_DIM))
 
-            crop = t.best_crop
-            ch, cw = crop.shape[:2]
-            scale = CROP_THUMBNAIL_MAX_DIM / max(ch, cw)
-            if scale < 1:
-                crop = cv2.resize(crop, (max(1, int(cw * scale)), max(1, int(ch * scale))))
+        return thumbs, larges
 
-            ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, CROP_JPEG_QUALITY])
-            crops.append(base64.b64encode(buf).decode("ascii") if ok else None)
+    @staticmethod
+    def _resize_and_encode(crop: np.ndarray, max_dim: int) -> Optional[str]:
+        ch, cw = crop.shape[:2]
+        scale = max_dim / max(ch, cw)
+        if scale < 1:
+            crop = cv2.resize(crop, (max(1, int(cw * scale)), max(1, int(ch * scale))))
 
-        return crops
+        ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, CROP_JPEG_QUALITY])
+        return base64.b64encode(buf).decode("ascii") if ok else None
