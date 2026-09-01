@@ -62,6 +62,12 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
 ]
+# /traffic detection cascade demo (see demo_documentation.md) - kept out of
+# the base install since it's a separate, optional page, not needed for the
+# core VLM demo. Install with: pip install -e ".[traffic]"
+traffic = [
+    "ai-edge-litert>=2.2.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/nvidia-ai-iot/live-vlm-webui"

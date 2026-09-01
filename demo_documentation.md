@@ -151,6 +151,10 @@ self-signed certificate warning (Advanced → Proceed).
 Always point every client at **port 18182** (the proxy), never `18181`
 directly — that's the whole reason the proxy exists.
 
+There's also a second, separate demo page at **`https://localhost:8090/traffic`**
+(object detection → click-to-caption cascade) running in this same process —
+see §7 for its one-time setup before it'll work.
+
 ---
 
 ## 4. Known upstream quirks (not our bugs — GenieX developer preview software)
@@ -217,3 +221,134 @@ See `CLAUDE.md` for the full list and reasoning; summary:
    the templates in `scripts/desktop/`, pointed at wherever this device
    cloned the repo).
 6. Sanity-check with the `curl` command in §1 before opening the browser.
+
+---
+
+## 7. Optional: Traffic Monitoring Cascade Demo (`/traffic`)
+
+A second, separate demo page — object detection running continuously on
+the Hexagon NPU (YOLO26n), feeding cropped vehicle images into the same
+GenieX/VLM pipeline for on-demand descriptions. Deliberately kept as its
+own route (`/traffic`) with its own pipeline, not merged into the main
+demo at `/` — see `CLAUDE.md` and the architecture plan doc for why.
+
+It runs inside the **same** `start_server.sh` process as the main demo —
+no extra terminal needed. Once terminal 3 (§3 above) is up, just navigate
+to `https://localhost:8090/traffic` (or `/traffic` on whatever host/port
+the main demo is running on).
+
+### 7.1 One-time setup (not covered by §1–3 above)
+
+Two things this page needs that the main demo doesn't: a detection model,
+and a demo video. Neither is committed to git (see `.gitignore` —
+`models/` and `demo_assets/` are both excluded; the model is a ~10 MB
+binary regenerable from a public model zoo, and the video is a licensed/
+provided clip, not something to bundle into every clone of this repo).
+
+**Install the extra Python dependency:**
+
+```bash
+source .venv/bin/activate
+pip install -e ".[traffic]"   # adds ai-edge-litert (TFLite runtime for the NPU delegate)
+```
+
+**Export the YOLO26n detection model**, via Qualcomm AI Hub (needs a free
+Qualcomm ID + API token, and internet access for this one-time step — the
+board itself doesn't need internet afterward, same as the GenieX model
+pull in §1):
+
+```bash
+python3.12 -m venv ~/qai-hub-env
+source ~/qai-hub-env/bin/activate
+pip install "qai-hub-models[yolo26-det]"
+
+qai-hub configure --api_token YOUR_TOKEN   # get this from your account at aihub.qualcomm.com
+qai-hub list-devices | grep -i 9075        # confirm "Dragonwing IQ-9075 EVK" is listed
+
+mkdir -p /path/to/live-vlm-webui/models
+qai-hub-models export yolo26_det --device "Dragonwing IQ-9075 EVK" \
+    --runtime tflite --precision float --ckpt-name yolo26n.pt \
+    --skip-profiling --skip-inferencing --output-dir /path/to/live-vlm-webui/models/
+
+cd /path/to/live-vlm-webui/models/
+mv yolo26_det-tflite-float/yolo26_det.tflite yolo26n_det_qcs9075.tflite
+mv yolo26_det-tflite-float/labels.txt coco_labels.txt
+rmdir yolo26_det-tflite-float
+```
+
+`models/` should now contain `yolo26n_det_qcs9075.tflite` and
+`coco_labels.txt` — both required; the server logs a clear warning and
+disables `/traffic` (without affecting the main demo) if either is
+missing at startup.
+
+> **Why float, not quantized:** float already runs at 60+ FPS on this
+> NPU (see §7.4) with full confidence-score resolution — no need to fight
+> quantization for a nano-sized model. YOLO26 doesn't even offer a w8a8
+> variant on AI Hub, only float and w8a16.
+
+**Place the demo video:**
+
+```bash
+mkdir -p /path/to/live-vlm-webui/demo_assets
+cp /path/to/your/highway-footage.mp4 /path/to/live-vlm-webui/demo_assets/car-highway.mp4
+```
+
+Any clip works — the current one is a 1920x1080, 30fps, 15-second highway
+loop. It plays on repeat automatically (`VideoFileTrack(loop=True)`); the
+filename `car-highway.mp4` is currently hardcoded in `server.py`
+(`TRAFFIC_VIDEO_PATH`) rather than configurable via CLI flag.
+
+### 7.2 What's on the page
+
+- Live bounding boxes burned into the video itself (server-side), with
+  label + confidence — not a client-side canvas overlay.
+- **Detected Vehicles** panel — each physical vehicle logged once (a
+  lightweight IoU tracker dedupes per-frame detections; see `tracker.py`),
+  using its largest-observed crop, newest first, capped at 40 shown (the
+  counter badge reflects the true running total, not just what's visible).
+- Click a card to open a detail view (larger image) with a **Describe**
+  button — sends that vehicle's crop through GenieX for a 1-2 sentence
+  description (color, type, brand; license plate only if clearly legible,
+  never guessed at). One caption in flight at a time, same 40s
+  failure-cooldown pattern as `vlm_service.py` (§4) to protect against
+  GenieX pile-up.
+- **✎ Prompt** — edit the caption prompt live; applies to future
+  Describe clicks, shared across reconnects (server-side, resets on
+  server restart), with a one-click reset to default.
+- Stop/Start (halts the whole pipeline — no new detections logged while
+  stopped) and a separate pause/play on the video itself (freezes the
+  actual server-side video position, not just the local screen — resuming
+  continues from exactly where it was paused, not "now").
+- Live FPS counter (top-left of the video).
+
+### 7.3 Known quirks specific to `/traffic`
+
+- **A VPN (e.g. Tailscale) active in the browser can cause repeated
+  ~3s disconnects.** The VPN's own network interface gets offered up as a
+  WebRTC ICE candidate alongside the real ones, and something about that
+  destabilizes the connection. If `/traffic` keeps reconnecting in a
+  loop, check for and disable any active VPN first — this was the root
+  cause the one time it was fully diagnosed, not a code bug.
+- **A rare native crash** (`munmap_chunk(): invalid pointer` / `free():
+  invalid pointer` / SIGSEGV) can still occur under heavy reconnect churn,
+  traced to a PyAV/libav thread-safety issue when video decode contexts
+  are opened/closed in rapid succession — mitigated (server-side rate
+  limiting on new connections, `buffered=False` on the frame relay so a
+  processing backlog can't build up) but not fully eliminated. If the
+  page shows "Disconnected" and won't recover, check whether the whole
+  `start_server.sh` process died (`ps aux | grep live_vlm_webui.server`)
+  and restart it if so — the main demo at `/` is unaffected either way,
+  since a `/traffic` crash takes down the shared process, but the reverse
+  isn't true in normal operation (this is a `/traffic`-specific failure
+  mode, not something the main demo's own WebRTC path triggers).
+- Only **one active `/traffic` connection at a time** — opening it in a
+  second tab/browser cleanly closes the first (by design, not a bug; see
+  `traffic_active_pc` in `server.py`).
+
+### 7.4 Reference numbers (this exact model/board/clip)
+
+| Stage | Measured |
+|---|---|
+| Detection latency (float model, HTP delegate) | ~13-16 ms/frame steady-state (~30ms first frame, incl. one-time delegate warmup) |
+| End-to-end throughput (detection + draw + encode) | ~28 fps on the full 1920x1080 clip |
+| VLM caption latency | Same as main demo (~2-4s typical; same GenieX stall risk applies) |
