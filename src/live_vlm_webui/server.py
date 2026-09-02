@@ -86,6 +86,7 @@ traffic_websockets = set()  # Track active WebSocket connections for the /traffi
 # single-screen kiosk demo: only one active /traffic connection at a time.
 traffic_active_pc = None
 traffic_active_video_track = None
+traffic_active_processor_track = None  # the DetectionVideoTrack - see "toggle_detection"
 # Opening/closing PyAV video containers back-to-back with no gap was
 # observed to trigger a native heap-corruption crash ("munmap_chunk():
 # invalid pointer") - this enforces a minimum spacing between /traffic
@@ -471,6 +472,11 @@ async def traffic_websocket_handler(request):
                 msg_type = data.get("type")
                 if msg_type in ("pause", "resume") and traffic_active_video_track:
                     getattr(traffic_active_video_track, msg_type)()
+                elif msg_type == "toggle_detection" and traffic_active_processor_track:
+                    if data.get("enabled"):
+                        traffic_active_processor_track.enable_detection()
+                    else:
+                        traffic_active_processor_track.disable_detection()
                 elif msg_type == "request_caption":
                     track_id = data.get("id")
                     if track_id:
@@ -512,7 +518,7 @@ async def traffic_offer(request):
             ),
         )
 
-    global traffic_active_pc, traffic_active_video_track, traffic_last_offer_time
+    global traffic_active_pc, traffic_active_video_track, traffic_active_processor_track, traffic_last_offer_time
 
     # Rate-limit connection setup itself (see TRAFFIC_MIN_OFFER_INTERVAL_SECONDS
     # comment above) - protects the server even if a client hammers this
@@ -538,7 +544,7 @@ async def traffic_offer(request):
     if traffic_active_pc is not None:
         logger.info("[traffic] New connection superseding existing one - closing old first")
         old_pc, old_track = traffic_active_pc, traffic_active_video_track
-        traffic_active_pc, traffic_active_video_track = None, None
+        traffic_active_pc, traffic_active_video_track, traffic_active_processor_track = None, None, None
         if old_track:
             old_track.stop()
         pcs.discard(old_pc)
@@ -557,7 +563,7 @@ async def traffic_offer(request):
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
-        global traffic_active_pc, traffic_active_video_track
+        global traffic_active_pc, traffic_active_video_track, traffic_active_processor_track
         logger.info(f"[traffic] Connection state: {pc.connectionState}")
         if pc.connectionState in ["failed", "closed"]:
             if video_cleanup_track:
@@ -567,6 +573,7 @@ async def traffic_offer(request):
             if traffic_active_pc is pc:
                 traffic_active_pc = None
                 traffic_active_video_track = None
+                traffic_active_processor_track = None
 
     try:
         video_track = VideoFileTrack(str(TRAFFIC_VIDEO_PATH), loop=True)
@@ -592,6 +599,7 @@ async def traffic_offer(request):
     processor_track = DetectionVideoTrack(
         relayed_video, yolo_detector, detection_callback=broadcast_traffic_detections
     )
+    traffic_active_processor_track = processor_track
     pc.addTrack(processor_track)
 
     await pc.setRemoteDescription(offer_sdp)

@@ -5,13 +5,20 @@
 # per-terminal commands are documented in demo_documentation.md; this script
 # just automates typing them in and waiting for each one to be ready before
 # starting the next, same as a human driving three terminals would.
+#
+# Optional first argument: the path to open in the browser once ready
+# (default "/", the main demo). scripts/run_traffic_demo.sh is a thin
+# wrapper that calls this with "/traffic" - both start the SAME single
+# server process (it serves both pages), just landing on a different page,
+# since /traffic needs the same GenieX chain running underneath anyway.
 
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SESSION="vlm-demo"
 MODEL="qualcomm/Qwen3-VL-4B-Instruct"
-UI_URL="https://localhost:8090"
+UI_PATH="${1:-/}"
+UI_URL="https://localhost:8090${UI_PATH}"
 
 cd "$REPO_DIR"
 

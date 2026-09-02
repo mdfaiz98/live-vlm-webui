@@ -15,11 +15,13 @@
 
 """
 Detection Video Track
-Wraps an incoming video track, runs YoloDetector on every frame, and draws
-bounding boxes directly onto the frame before it's sent over WebRTC - for
-the /traffic cascade demo. Boxes are burned into the video itself (not a
-separate client-side canvas overlay), matching the annotated-video style
-already validated against this same clip (see annotate_video.py smoke test).
+Wraps an incoming video track and, once enabled (see detection_enabled -
+starts off, the demo plays plain video until a UI button turns it on),
+runs YoloDetector on every frame and draws bounding boxes directly onto
+the frame before it's sent over WebRTC - for the /traffic cascade demo.
+Boxes are burned into the video itself (not a separate client-side canvas
+overlay), matching the annotated-video style already validated against
+this same clip (see annotate_video.py smoke test).
 
 Separately, a lightweight IoU tracker (see tracker.py) dedupes per-frame
 detections so each physical vehicle is reported via callback exactly once
@@ -65,7 +67,14 @@ _detection_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="yolo
 
 class DetectionVideoTrack(VideoStreamTrack):
     """Video track that draws detection boxes onto every frame and, on a
-    throttled interval, reports cropped thumbnails via a callback."""
+    throttled interval, reports cropped thumbnails via a callback.
+
+    Detection starts OFF (see detection_enabled) - the demo plays the plain
+    video immediately on connect, and detection only turns on once
+    enable_detection() is called (from a UI button, via
+    traffic_websocket_handler's "toggle_detection" message). While off, no
+    NPU inference happens at all - not just "boxes hidden" - frames pass
+    through untouched, same as before detection existed on this page."""
 
     def __init__(
         self,
@@ -81,11 +90,25 @@ class DetectionVideoTrack(VideoStreamTrack):
         self.detection_callback = detection_callback
         self.tracker = SimpleVehicleTracker()
         self.frame_count = 0
+        self.detection_enabled = False
+
+    def enable_detection(self):
+        if not self.detection_enabled:
+            self.detection_enabled = True
+            logger.info("[traffic] Detection enabled")
+
+    def disable_detection(self):
+        if self.detection_enabled:
+            self.detection_enabled = False
+            logger.info("[traffic] Detection disabled")
 
     async def recv(self):
         try:
             frame = await self.track.recv()
             self.frame_count += 1
+
+            if not self.detection_enabled:
+                return frame
 
             # BGR matches both cv2's drawing conventions and av.VideoFrame's
             # "bgr24" format, so no extra channel-order conversion is needed

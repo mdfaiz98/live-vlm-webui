@@ -29,6 +29,32 @@
     background: var(--advantech-navy-light);
 }
 
+.detection-toggle-btn {
+    padding: 6px 16px;
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: #fff;
+    background: var(--advantech-navy);
+    border: 1px solid var(--advantech-navy);
+    border-radius: 6px;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.detection-toggle-btn:hover {
+    background: var(--advantech-navy-light);
+}
+
+.detection-toggle-btn.is-running {
+    background: var(--ring-cpu-color);
+    border-color: var(--ring-cpu-color);
+    color: #06210f;
+}
+
+.detection-toggle-btn.is-running:hover {
+    filter: brightness(1.1);
+}
+
 .traffic-layout {
     display: grid;
     grid-template-columns: 1fr 340px;

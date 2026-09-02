@@ -15,6 +15,7 @@
     const trackedList = document.getElementById('trackedList');
     const trackedCount = document.getElementById('trackedCount');
     const toggleBtn = document.getElementById('toggleBtn');
+    const detectionToggleBtn = document.getElementById('detectionToggleBtn');
     const fpsCounter = document.getElementById('fpsCounter');
     const playPauseBtn = document.getElementById('playPauseBtn');
     const editPromptBtn = document.getElementById('editPromptBtn');
@@ -36,6 +37,26 @@
     let userInitiatedStop = false;
     const RECONNECT_BASE_DELAY_MS = 3000;
     const RECONNECT_MAX_DELAY_MS = 30000;
+
+    // Detection starts OFF on every (re)connect - see DetectionVideoTrack's
+    // detection_enabled in detection_processor.py. The plain video plays
+    // immediately; detection (boxes + panel population) only turns on once
+    // this button is clicked, for a live "watch it turn on" demo moment.
+    let detectionEnabled = false;
+
+    function setDetectionButtonState(enabled) {
+        detectionEnabled = enabled;
+        detectionToggleBtn.textContent = enabled ? 'Stop Detection' : 'Start Detection';
+        detectionToggleBtn.classList.toggle('is-running', enabled);
+    }
+
+    detectionToggleBtn.addEventListener('click', () => {
+        const next = !detectionEnabled;
+        setDetectionButtonState(next);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'toggle_detection', enabled: next }));
+        }
+    });
 
     // Append-only history of confirmed vehicle sightings, newest first -
     // each vehicle is reported by the server exactly once (see tracker.py),
@@ -305,6 +326,7 @@
     async function start() {
         try {
             updateStatus('Connecting...', 'processing');
+            setDetectionButtonState(false); // every fresh connection starts with detection off
 
             peerConnection = new RTCPeerConnection({ iceServers: [] });
 
