@@ -32,6 +32,8 @@ from index.html; see CLAUDE.md and VLM_Cascade_Architecture_Plan.md.
 
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/traffic.css">
+    <!-- Self-hosted icons (same as the main demo) -->
+    <script src="/vendor/lucide.min.js"></script>
 </head>
 <body>
     <div class="header">
@@ -46,10 +48,50 @@ from index.html; see CLAUDE.md and VLM_Cascade_Architecture_Plan.md.
         </div>
         <div class="header-right">
             <span class="status-badge disconnected" id="connectionStatus">Disconnected</span>
+            <button class="theme-toggle traffic-theme-toggle" id="themeToggle" title="Theme: Auto / Light / Dark">
+                <span id="themeIcon"><i data-lucide="monitor"></i></span>
+                <span id="themeText">Auto</span>
+            </button>
+            <button class="settings-btn page-fullscreen-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+                <i data-lucide="settings"></i>
+            </button>
+            <button class="settings-btn page-fullscreen-btn" id="pageFullscreenBtn" title="Full screen (Esc to exit)" aria-label="Full screen">
+                <!-- lucide maximize-2 / minimize-2, inlined: /traffic doesn't load the lucide library -->
+                <svg class="lucide" id="pageFullscreenIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+            </button>
             <button class="detection-toggle-btn" id="detectionToggleBtn">Start Detection</button>
             <button class="traffic-toggle-btn" id="toggleBtn">Stop</button>
         </div>
     </div>
+
+    <!-- Settings drawer: video source, detection model, VLM model -->
+    <div class="settings-drawer-backdrop" id="settingsBackdrop" hidden></div>
+    <aside class="settings-drawer" id="settingsDrawer" aria-label="Settings">
+        <div class="settings-drawer-header">
+            <span>Settings</span>
+            <button class="detail-modal-close settings-drawer-close" id="settingsCloseBtn" aria-label="Close">&times;</button>
+        </div>
+        <div class="settings-drawer-body">
+            <section class="settings-group">
+                <div class="settings-group-title">Video Source</div>
+                <label for="videoSelect">Video</label>
+                <select id="videoSelect"></select>
+                <button class="prompt-action-btn primary settings-apply" id="applySourceBtn">Play this video</button>
+            </section>
+
+            <section class="settings-group">
+                <div class="settings-group-title">Detection Model</div>
+                <select id="detectionModelSelect"></select>
+                <div class="settings-hint" id="detectionModelHint">Runs on the Hexagon NPU &middot; switches live</div>
+            </section>
+
+            <section class="settings-group">
+                <div class="settings-group-title">Vision-Language Model</div>
+                <select id="vlmModelSelect"></select>
+                <div class="settings-hint">Used when you click Describe on a vehicle</div>
+            </section>
+        </div>
+    </aside>
 
     <div class="traffic-layout">
         <div class="video-panel">
@@ -60,11 +102,11 @@ from index.html; see CLAUDE.md and VLM_Cascade_Architecture_Plan.md.
                 <div class="loading-overlay" id="loadingOverlay">Connecting...</div>
             </div>
             <div class="video-caption">
-                Vehicles detected on-device (YOLO26n, Hexagon NPU)
+                Vehicles detected on-device (<span id="detectionModelName">YOLO26n</span>, Hexagon NPU)
             </div>
         </div>
 
-        <div class="tracked-panel">
+        <div class="tracked-panel" id="trackedPanel">
             <div class="tracked-panel-header">
                 <span>Detected Vehicles</span>
                 <div class="tracked-panel-header-right">
@@ -82,6 +124,120 @@ from index.html; see CLAUDE.md and VLM_Cascade_Architecture_Plan.md.
             </div>
             <div class="tracked-list" id="trackedList">
                 <div class="tracked-empty">Waiting for detections...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Live telemetry - same card as the main demo's "Local System Stats"
+         (style.css), plus an Accelerators card: GPU / NPU busy % from
+         QualcommMonitor -->
+    <div class="traffic-stats">
+        <div class="result-card" id="systemStatsCard">
+            <div class="result-header" style="display: flex; justify-content: space-between; align-items: center; gap: 20px;">
+                <div class="result-title">Local System Stats</div>
+                <div style="display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-secondary); text-align: right; font-weight: 400; flex-shrink: 1; min-width: 0;">
+                    <span id="systemInfoHeader" style="flex: 1;">Loading...</span>
+                    <img id="systemProductImage" src="/images/m48-workstation-256px-wht.png" alt="System"
+                         style="width: 48px; height: 48px; object-fit: contain;"
+                         onerror="this.style.display='none';">
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-label">CPU Utilization</span>
+                    </div>
+                    <div class="ring-gauge-wrapper">
+                            <svg class="ring-gauge" viewBox="0 0 100 100">
+                                <circle class="ring-track" cx="50" cy="50" r="42"></circle>
+                                <circle class="ring-fill" id="cpuRing" cx="50" cy="50" r="42"
+                                        stroke-dasharray="263.9" stroke-dashoffset="263.9"></circle>
+                            </svg>
+                            <div class="ring-center-text">
+                                <span class="stat-value" id="cpuUtil">--%</span>
+                            </div>
+                        </div>
+                    <canvas id="cpuSparkline" class="sparkline"></canvas>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span class="stat-label">System RAM</span>
+                    </div>
+                    <div class="ring-gauge-wrapper">
+                            <svg class="ring-gauge" viewBox="0 0 100 100">
+                                <circle class="ring-track" cx="50" cy="50" r="42"></circle>
+                                <circle class="ring-fill ram" id="ramRing" cx="50" cy="50" r="42"
+                                        stroke-dasharray="263.9" stroke-dashoffset="263.9"></circle>
+                            </svg>
+                            <div class="ring-center-text">
+                                <span class="stat-value" id="ramUsage" style="font-size: 14px;">-- GB</span>
+                            </div>
+                        </div>
+                    <canvas id="ramSparkline" class="sparkline"></canvas>
+                </div>
+
+                <div class="stat-card accel-card" id="accelCard" hidden>
+                    <div class="stat-header">
+                        <span class="stat-label">Accelerators</span>
+                        <div class="thermal-legend">
+                            <span class="thermal-legend-item"><span class="thermal-legend-swatch" style="background:var(--thermal-igpu);"></span>GPU</span>
+                            <span class="thermal-legend-item"><span class="thermal-legend-swatch" style="background:var(--thermal-npu);"></span>NPU</span>
+                        </div>
+                    </div>
+                    <div class="accel-rings">
+                        <div class="accel-ring" title="Adreno GPU busy time, all programs (desktop, browser, this app) - from the GPU driver">
+                            <div class="ring-gauge-wrapper accel">
+                            <svg class="ring-gauge" viewBox="0 0 100 100">
+                                <circle class="ring-track" cx="50" cy="50" r="42"></circle>
+                                <circle class="ring-fill gpu" id="gpuRing" cx="50" cy="50" r="42"
+                                        stroke-dasharray="263.9" stroke-dashoffset="263.9"></circle>
+                            </svg>
+                            <div class="ring-center-text">
+                                <span class="stat-value accel-value" id="gpuUtil">--%</span>
+                            </div>
+                        </div>
+                            <div class="accel-caption">GPU &middot; <span id="gpuFreq">-- MHz</span></div>
+                        </div>
+                        <div class="accel-ring" title="Hexagon NPU busy time: the YOLO26n vehicle detector plus any Qwen3-VL description being written (both run on the NPU; it has no readable utilization counter, so this is measured from the app)">
+                            <div class="ring-gauge-wrapper accel">
+                            <svg class="ring-gauge" viewBox="0 0 100 100">
+                                <circle class="ring-track" cx="50" cy="50" r="42"></circle>
+                                <circle class="ring-fill npu" id="npuRing" cx="50" cy="50" r="42"
+                                        stroke-dasharray="263.9" stroke-dashoffset="263.9"></circle>
+                            </svg>
+                            <div class="ring-center-text">
+                                <span class="stat-value accel-value" id="npuUtil">--%</span>
+                            </div>
+                        </div>
+                            <div class="accel-caption">NPU &middot; AI models</div>
+                        </div>
+                    </div>
+                    <canvas id="accelChart" class="sparkline"></canvas>
+                </div>
+
+                <div class="stat-card thermal-card">
+                    <div class="stat-header">
+                        <span class="stat-label">Thermal</span>
+                        <div class="thermal-legend">
+                            <span class="thermal-legend-item">
+                                <span class="thermal-legend-swatch" style="background:var(--thermal-cpu);"></span>
+                                CPU: <span id="cpuTempValue">-- &deg;C</span>
+                            </span>
+                            <span class="thermal-legend-item">
+                                <span class="thermal-legend-swatch" style="background:var(--thermal-igpu);"></span>
+                                iGPU: <span id="gpuTempValue">-- &deg;C</span>
+                            </span>
+                            <span class="thermal-legend-item">
+                                <span class="thermal-legend-swatch" style="background:var(--thermal-npu);"></span>
+                                NPU: <span id="npuTempValue">-- &deg;C</span>
+                            </span>
+                        </div>
+                    </div>
+                    <canvas id="thermalChart" class="thermal-chart"></canvas>
+                </div>
             </div>
         </div>
     </div>

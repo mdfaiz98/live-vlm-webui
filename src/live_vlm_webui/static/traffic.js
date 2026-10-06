@@ -13,6 +13,8 @@
     const loadingOverlay = document.getElementById('loadingOverlay');
     const connectionStatus = document.getElementById('connectionStatus');
     const trackedList = document.getElementById('trackedList');
+    const trackedPanel = document.getElementById('trackedPanel');
+    const videoWrap = document.getElementById('videoWrap');
     const trackedCount = document.getElementById('trackedCount');
     const toggleBtn = document.getElementById('toggleBtn');
     const detectionToggleBtn = document.getElementById('detectionToggleBtn');
@@ -236,6 +238,150 @@
         promptEditArea.classList.add('hidden');
     });
 
+    // ---- Telemetry column (gpu_stats from the server's system monitor) ----
+    // Same data as the main demo's System Stats card; on Qualcomm boards the
+    // monitor adds GPU busy % + clock (driver), NPU busy % (detector's own
+    // HTP time + GenieX VLM request time, capped at 100%) - see QualcommMonitor.
+    const RING_CIRCUMFERENCE = 263.9; // 2 * pi * r42
+    const TELEMETRY_MIN_INTERVAL_MS = 500; // server sends at 4 Hz; this is plenty for a dashboard
+    let lastTelemetryRender = 0;
+
+    function themeColor(varName) {
+        return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    }
+
+    function setText(id, text) {
+        const el = document.getElementById(id);
+        if (el && el.textContent !== text) el.textContent = text;
+    }
+
+    function setRing(id, percent) {
+        const ring = document.getElementById(id);
+        if (!ring) return;
+        const clamped = Math.max(0, Math.min(100, percent || 0));
+        ring.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - clamped / 100);
+        ring.classList.toggle('high', clamped >= 85);
+    }
+
+    function sizeCanvas(canvas) {
+        const width = canvas.offsetWidth || canvas.parentElement.offsetWidth || 260;
+        const height = canvas.offsetHeight || 40;
+        if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+        }
+    }
+
+    // Multi-series line chart; fixedRange {min, max} (e.g. 0-100 for
+    // utilization), otherwise auto-scaled across all series. fill adds a
+    // translucent area under single-series charts.
+    function drawChart(canvas, series, fixedRange = null, fill = false) {
+        sizeCanvas(canvas);
+        const ctx = canvas.getContext('2d');
+        const { width, height } = canvas;
+        ctx.clearRect(0, 0, width, height);
+
+        const all = [];
+        series.forEach((s) => (s.data || []).forEach((v) => { if (v != null) all.push(v); }));
+        if (all.length === 0) return;
+        const min = fixedRange ? fixedRange.min : Math.min(...all);
+        const max = fixedRange ? fixedRange.max : Math.max(...all, min + 1);
+        const range = (max - min) || 1;
+        const pad = height * 0.1;
+
+        series.forEach((s) => {
+            if (!s.data || s.data.length === 0) return;
+            const step = width / (s.data.length - 1 || 1);
+            ctx.strokeStyle = s.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            let started = false;
+            let lastX = 0;
+            s.data.forEach((v, i) => {
+                if (v == null) return; // gap for missing readings
+                const x = i * step;
+                const y = height - pad - ((v - min) / range) * (height - 2 * pad);
+                if (started) ctx.lineTo(x, y); else { ctx.moveTo(x, y); started = true; }
+                lastX = x;
+            });
+            ctx.stroke();
+            if (fill && started) {
+                ctx.lineTo(lastX, height);
+                ctx.lineTo(0, height);
+                ctx.closePath();
+                ctx.fillStyle = s.color + '20';
+                ctx.fill();
+            }
+        });
+    }
+
+    function renderTelemetry(stats) {
+        const now = Date.now();
+        if (now - lastTelemetryRender < TELEMETRY_MIN_INTERVAL_MS) return;
+        lastTelemetryRender = now;
+
+        // Header - same three-line format as the main demo's System Stats card:
+        // board + SoC (hostname) with CPU / GPU + NPU / OS + kernel
+        const header = document.getElementById('systemInfoHeader');
+        let headerHtml;
+        if (stats.qc_board_name) {
+            const soc = stats.qc_soc_name ? ` (${escapeHtml(stats.qc_soc_name)})` : '';
+            const cpuModel = stats.qc_cpu_model ? ` with ${escapeHtml(stats.qc_cpu_model)}` : '';
+            const npu = stats.qc_npu_name ? ` &middot; ${escapeHtml(stats.qc_npu_name)}` : '';
+            const os = stats.os_pretty
+                ? `<br>${escapeHtml(stats.os_pretty)}${stats.kernel_version ? ' (' + escapeHtml(stats.kernel_version) + ')' : ''}`
+                : '';
+            headerHtml = `<b>${escapeHtml(stats.qc_board_name)}</b>${soc} (<code>${escapeHtml(stats.hostname || '')}</code>)${cpuModel}<br>` +
+                `${escapeHtml(stats.qc_gpu_name || 'Adreno GPU')}${npu}${os}`;
+        } else {
+            headerHtml = `<code>${escapeHtml(stats.hostname || 'System')}</code><br>with ${escapeHtml(stats.cpu_model || '')}`;
+        }
+        if (header.innerHTML !== headerHtml) header.innerHTML = headerHtml;
+
+        const cpu = stats.cpu_percent || 0;
+        setText('cpuUtil', `${cpu.toFixed(1)}%`);
+        setRing('cpuRing', cpu);
+        const ramHtml = `${(stats.ram_used_gb || 0).toFixed(1)}<span class="stat-value-denominator">/${(stats.ram_total_gb || 0).toFixed(1)}GB</span>`;
+        const ramEl = document.getElementById('ramUsage');
+        if (ramEl.innerHTML !== ramHtml) ramEl.innerHTML = ramHtml;
+        setRing('ramRing', stats.ram_percent || 0);
+
+        const accelCard = document.getElementById('accelCard');
+        const hasAccel = stats.gpu_freq_mhz != null || stats.npu_percent != null;
+        accelCard.hidden = !hasAccel;
+        if (hasAccel) {
+            const pctText = (v) => (v == null ? 'N/A' : `${v.toFixed(0)}%`);
+            setText('gpuUtil', pctText(stats.gpu_percent));
+            setText('npuUtil', pctText(stats.npu_percent));
+            setText('gpuFreq', stats.gpu_freq_mhz != null ? `${stats.gpu_freq_mhz.toFixed(0)} MHz` : '-- MHz');
+            setRing('gpuRing', stats.gpu_percent);
+            setRing('npuRing', stats.npu_percent);
+        }
+
+        const fmtTemp = (t) => (t == null ? 'N/A' : `${t.toFixed(1)}°C`);
+        setText('cpuTempValue', fmtTemp(stats.cpu_temp_c));
+        setText('gpuTempValue', fmtTemp(stats.gpu_temp_c));
+        setText('npuTempValue', fmtTemp(stats.npu_temp_c));
+
+        const h = stats.history;
+        if (!h) return;
+        drawChart(document.getElementById('cpuSparkline'),
+            [{ data: h.cpu_util, color: themeColor('--thermal-cpu') }], { min: 0, max: 100 }, true);
+        drawChart(document.getElementById('ramSparkline'),
+            [{ data: h.ram_used, color: themeColor('--accent-color-2') }], null, true);
+        if (hasAccel) {
+            drawChart(document.getElementById('accelChart'), [
+                { data: h.gpu_util, color: themeColor('--thermal-igpu') },
+                { data: h.npu_util, color: themeColor('--thermal-npu') },
+            ], { min: 0, max: 100 });
+        }
+        drawChart(document.getElementById('thermalChart'), [
+            { data: h.cpu_temp, color: themeColor('--thermal-cpu') },
+            { data: h.gpu_temp, color: themeColor('--thermal-igpu') },
+            { data: h.npu_temp, color: themeColor('--thermal-npu') },
+        ]);
+    }
+
     function connectWebSocket() {
         const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         ws = new WebSocket(`${proto}//${window.location.host}/api/traffic/ws`);
@@ -259,6 +405,20 @@
                     renderHistory();
                     if (openModalId === data.id) renderModalContent();
                 }
+            } else if (data.type === 'settings_updated') {
+                if (data.detection_model) {
+                    detectionModelSelect.value = data.detection_model;
+                    showDetectionModelName();
+                    detectionModelSelect.disabled = false;
+                    setHint(detectionModelHint, 'Runs on the Hexagon NPU \u00b7 switches live');
+                }
+                if (data.vlm_model) vlmModelSelect.value = data.vlm_model;
+            } else if (data.type === 'settings_error') {
+                detectionModelSelect.disabled = false;
+                setHint(detectionModelHint, data.text, true);
+                loadSettings(); // put the select back on the model that's actually active
+            } else if (data.type === 'gpu_stats') {
+                renderTelemetry(data.stats);
             } else if (data.type === 'status') {
                 currentPrompt = data.prompt || '';
                 defaultPrompt = data.default_prompt || '';
@@ -392,6 +552,7 @@
                 body: JSON.stringify({
                     sdp: peerConnection.localDescription.sdp,
                     type: peerConnection.localDescription.type,
+                    video: savedVideo(),
                 }),
             });
 
@@ -479,6 +640,172 @@
         playPauseBtn.innerHTML = '&#9654;';
         playPauseBtn.title = 'Play';
     });
+
+    // Keep the Detected Vehicles panel exactly as tall as the video (the list
+    // scrolls inside it), through window resizes and full screen.
+    new ResizeObserver(() => {
+        trackedPanel.style.height = `${videoWrap.offsetHeight}px`;
+        trackedPanel.style.maxHeight = 'none';
+    }).observe(videoWrap);
+
+    // Page full screen: the whole UI without browser chrome. Leaving it gives
+    // the normal browser window back. Ported from the drone detection demo.
+    const pageFullscreenBtn = document.getElementById('pageFullscreenBtn');
+    const pageFullscreenIcon = document.getElementById('pageFullscreenIcon');
+    const ICON_MAXIMIZE = '<path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>';
+    const ICON_MINIMIZE = '<path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/>';
+    pageFullscreenBtn.addEventListener('click', () => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            document.documentElement.requestFullscreen().catch(() => {});
+        }
+    });
+    document.addEventListener('fullscreenchange', () => {
+        const on = !!document.fullscreenElement;
+        pageFullscreenIcon.innerHTML = on ? ICON_MINIMIZE : ICON_MAXIMIZE;
+        pageFullscreenBtn.title = on ? 'Exit full screen (Esc)' : 'Full screen (Esc to exit)';
+    });
+    // /traffic?fullscreen=1 enters full screen on load where the browser allows
+    // it without a click (e.g. a kiosk profile); elsewhere it's just ignored.
+    if (new URLSearchParams(location.search).get('fullscreen') === '1') {
+        document.documentElement.requestFullscreen().catch(() => {});
+    }
+
+    // ---- Theme: same Auto -> Light -> Dark cycle and saved preference as the main demo ----
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+    const themeText = document.getElementById('themeText');
+
+    function applyTheme(theme) {
+        const light = theme === 'light' ||
+            (theme === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches);
+        document.body.classList.toggle('light-theme', light);
+        const icon = { light: 'sun', dark: 'moon', auto: 'monitor' }[theme];
+        themeIcon.innerHTML = `<i data-lucide="${icon}"></i>`;
+        themeText.textContent = theme === 'auto' ? 'Auto' : theme === 'light' ? 'Light' : 'Dark';
+        if (window.lucide) lucide.createIcons();
+        document.getElementById('systemProductImage').src =
+            light ? '/images/m48-workstation-256px-blk.png' : '/images/m48-workstation-256px-wht.png';
+        lastTelemetryRender = 0; // redraw charts in the new theme's colours on the next update
+    }
+
+    function savedTheme() {
+        let t = null;
+        try { t = localStorage.getItem('theme'); } catch (e) { /* storage blocked */ }
+        return t === 'light' || t === 'dark' ? t : 'auto';
+    }
+
+    themeToggle.addEventListener('click', () => {
+        const next = { auto: 'light', light: 'dark', dark: 'auto' }[savedTheme()];
+        try {
+            if (next === 'auto') localStorage.removeItem('theme');
+            else localStorage.setItem('theme', next);
+        } catch (e) { /* storage blocked - theme still applies for this visit */ }
+        applyTheme(next);
+    });
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+        if (savedTheme() === 'auto') applyTheme('auto');
+    });
+    applyTheme(savedTheme());
+
+    // ---- Settings drawer: video source, detection model, VLM model ----
+    const settingsDrawer = document.getElementById('settingsDrawer');
+    const settingsBackdrop = document.getElementById('settingsBackdrop');
+    const videoSelect = document.getElementById('videoSelect');
+    const detectionModelSelect = document.getElementById('detectionModelSelect');
+    const detectionModelHint = document.getElementById('detectionModelHint');
+    const vlmModelSelect = document.getElementById('vlmModelSelect');
+    const VIDEO_KEY = 'trafficVideo';
+
+    function setHint(el, text, isError = false) {
+        el.textContent = text;
+        el.classList.toggle('error', isError);
+    }
+
+    // The video the next connection plays, remembered across reloads (null = server default)
+    function savedVideo() {
+        try { return localStorage.getItem(VIDEO_KEY); } catch (e) { return null; }
+    }
+
+    function fillSelect(select, options, value) {
+        select.innerHTML = options.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.name)}</option>`).join('');
+        if (value != null && options.some((o) => o.id === value)) select.value = value;
+    }
+
+    // "Vehicles detected on-device (<model>, Hexagon NPU)" under the video
+    function showDetectionModelName() {
+        const opt = detectionModelSelect.selectedOptions[0];
+        if (opt) document.getElementById('detectionModelName').textContent = opt.textContent;
+    }
+
+    async function loadSettings(selectVideo = null) {
+        try {
+            const res = await fetch('/api/traffic/settings');
+            const s = await res.json();
+            fillSelect(videoSelect, s.videos, selectVideo || savedVideo() || s.default_video);
+            fillSelect(detectionModelSelect, s.detection_models, s.detection_model);
+            showDetectionModelName();
+            fillSelect(vlmModelSelect, s.vlm_models, s.vlm_model);
+        } catch (e) {
+            console.error('Could not load settings:', e);
+        }
+    }
+
+    function openSettings() {
+        loadSettings();
+        settingsBackdrop.hidden = false;
+        settingsDrawer.classList.add('open');
+    }
+
+    function closeSettings() {
+        settingsDrawer.classList.remove('open');
+        settingsBackdrop.hidden = true;
+    }
+
+    document.getElementById('settingsBtn').addEventListener('click', openSettings);
+    document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
+    settingsBackdrop.addEventListener('click', closeSettings);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && settingsDrawer.classList.contains('open')) closeSettings();
+    });
+
+    // Play this video: save it, then reconnect with it
+    document.getElementById('applySourceBtn').addEventListener('click', () => {
+        try { localStorage.setItem(VIDEO_KEY, videoSelect.value); } catch (e) { /* storage blocked */ }
+        // A fresh connection starts with detection off; clear the old video's vehicles
+        history = [];
+        totalDetectionCount = 0;
+        renderHistory();
+        closeSettings();
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+        reconnectAttempts = 0;
+        cleanup();
+        videoElement.srcObject = null;
+        loadingOverlay.textContent = 'Switching video...';
+        loadingOverlay.classList.remove('hidden');
+        userInitiatedStop = false;
+        toggleBtn.textContent = 'Stop';
+        toggleBtn.classList.remove('is-stopped');
+        start();
+    });
+
+    detectionModelSelect.addEventListener('change', () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            detectionModelSelect.disabled = true;
+            setHint(detectionModelHint, 'Loading model on the NPU...');
+            ws.send(JSON.stringify({ type: 'set_detection_model', id: detectionModelSelect.value }));
+        }
+    });
+
+    vlmModelSelect.addEventListener('change', () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'set_vlm_model', id: vlmModelSelect.value }));
+        }
+    });
+
+    loadSettings();
 
     start();
 })();

@@ -320,6 +320,49 @@ filename `car-highway.mp4` is currently hardcoded in `server.py`
   actual server-side video position, not just the local screen — resuming
   continues from exactly where it was paused, not "now").
 - Live FPS counter (top-left of the video).
+- **Local System Stats** card along the bottom — the same card as the main
+  demo's (CPU, RAM, Thermal), plus an **Accelerators** card ported from the
+  QCS6490 drone detection demo (`QualcommMonitor` in `gpu_monitor.py`).
+  Where the accelerator numbers come from:
+  - **GPU** — Adreno busy time summed over all DRM clients (desktop,
+    browser, this app) from `/proc/*/fdinfo` `drm-engine-gpu`, plus the
+    devfreq clock. Mostly ~1% here: the video is CPU-decoded and nothing in
+    the cascade uses the GPU.
+  - **NPU · AI models** — one ring for both NPU workloads: the time the
+    YOLO26n detector spends in its Hexagon `invoke()` plus the time a
+    Describe request is in flight on GenieX (Qwen3-VL, in the GenieX
+    process), capped at 100%. ~30% with detection running, 100% while a
+    description is being written. The NPU has no readable utilization
+    counter, so this is measured from the app, not read from hardware.
+  The main demo at `/` gets the same data source (its header now shows
+  "Advantech AFE-A503 (IQ9)"), but only renders CPU/RAM/thermal as before.
+- **⚙ Settings** drawer (header): **Video** — the files in `demo_assets/`
+  (*Highway traffic* = `car-highway.mp4`, *Parking entrance (barrier)* =
+  `parking-entrance-barrier.mp4`; names in `TRAFFIC_VIDEO_NAMES`), looped,
+  applied with *Play this video*; **Detection model** — every `.tflite` in
+  `models/` (switches live); **Vision-language model** — whatever GenieX
+  serves (used for Describe). Plus a **theme toggle** (Auto / Light / Dark),
+  shared with the main demo's saved preference.
+- **Entry zone** (parking video): only vehicles whose box bottom-centre is
+  inside the amber *ENTRY ZONE* (the ground in front of the barrier) are
+  boxed and logged, so street traffic behind the barrier and the parked car
+  at the right edge are ignored. Per-video zones live in
+  `TRAFFIC_ENTRY_ZONES` in `server.py` (fractions of the frame); videos
+  without one use the whole frame.
+- **Parking demo video**: stitched from nine clips of the [AGH University
+  parking database](https://qoe.agh.edu.pl/parking-database/) (720p,
+  upscaled to 1080p) — offered "to the research community free of charge",
+  so treat it as research footage, not ours. Rebuild: download
+  `agh_src{13,15,18,20,10,1,11,12,21}_hrc0.avi` and join them with
+  ffmpeg's `concat` filter (the concat *demuxer* fails on these AVIs).
+- Describe uses the vehicle's latest best crop (the tracker keeps refining
+  it after the card appears), and the default prompt puts the plate on its
+  own line with an explicit "Plate: not readable" — see the comment on
+  `TRAFFIC_CAPTION_DEFAULT_PROMPT`.
+- The page is sized to fit on one screen without scrolling (e.g. 1920x1080
+  full screen, via the ⤢ button in the header): the video shrinks slightly
+  on shorter screens so the stats card stays visible. If the stats card's
+  height ever changes, re-measure `--fit-reserve` in `traffic.css`.
 
 ### 7.3 Known quirks specific to `/traffic`
 

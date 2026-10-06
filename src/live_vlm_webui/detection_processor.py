@@ -36,7 +36,7 @@ import base64
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 import av
 import cv2
@@ -51,6 +51,7 @@ logger = logging.getLogger(__name__)
 
 BOX_COLOR = (35, 226, 138)  # BGR - matches the UI's --ring-cpu-color green
 LABEL_TEXT_COLOR = (10, 12, 10)
+ZONE_COLOR = (0, 200, 255)  # BGR amber - distinct from the green vehicle boxes
 CROP_THUMBNAIL_MAX_DIM = 160  # small panel-list thumbnail
 CROP_MODAL_MAX_DIM = 480  # larger crop for the click-to-open detail modal
 CROP_JPEG_QUALITY = 80
@@ -91,6 +92,12 @@ class DetectionVideoTrack(VideoStreamTrack):
         self.tracker = SimpleVehicleTracker()
         self.frame_count = 0
         self.detection_enabled = False
+        # Optional entry zone (x1, y1, x2, y2 as fractions of the frame): only
+        # vehicles whose box bottom-centre - where the wheels touch the ground -
+        # is inside it are drawn and logged - e.g. the
+        # barrier lanes of a parking entrance, not cars passing on the street
+        # behind it. None = the whole frame.
+        self.entry_zone: Optional[Tuple[float, float, float, float]] = None
 
     def enable_detection(self):
         if not self.detection_enabled:
@@ -124,6 +131,8 @@ class DetectionVideoTrack(VideoStreamTrack):
             # connections can't invoke() the shared interpreter at once.
             detections = await loop.run_in_executor(_detection_executor, self.detector.detect, rgb)
             latency_ms = (time.perf_counter() - start) * 1000
+            if self.entry_zone is not None:
+                detections = self._in_zone(detections, img.shape[1], img.shape[0])
 
             if self.frame_count % 90 == 0:
                 logger.debug(
@@ -151,8 +160,33 @@ class DetectionVideoTrack(VideoStreamTrack):
             logger.error(f"Error processing detection frame: {e}", exc_info=True)
             raise
 
+    def _zone_px(self, w: int, h: int) -> Tuple[int, int, int, int]:
+        zx1, zy1, zx2, zy2 = self.entry_zone
+        return int(zx1 * w), int(zy1 * h), int(zx2 * w), int(zy2 * h)
+
+    def _in_zone(self, detections: List[Detection], w: int, h: int) -> List[Detection]:
+        x1, y1, x2, y2 = self._zone_px(w, h)
+        return [
+            d for d in detections
+            if x1 <= (d.bbox[0] + d.bbox[2]) / 2 <= x2 and y1 <= d.bbox[3] <= y2
+        ]
+
+    def _draw_zone(self, img: np.ndarray) -> None:
+        """Entry zone: light translucent fill, outline and an "ENTRY ZONE" tag."""
+        h, w = img.shape[:2]
+        x1, y1, x2, y2 = self._zone_px(w, h)
+        overlay = img.copy()
+        cv2.rectangle(overlay, (x1, y1), (x2, y2), ZONE_COLOR, -1)
+        cv2.addWeighted(overlay, 0.10, img, 0.90, 0, dst=img)
+        cv2.rectangle(img, (x1, y1), (x2, y2), ZONE_COLOR, 3)
+        (tw, th), base = cv2.getTextSize("ENTRY ZONE", cv2.FONT_HERSHEY_SIMPLEX, 0.9, 2)
+        cv2.rectangle(img, (x1, y1), (x1 + tw + 16, y1 + th + base + 12), ZONE_COLOR, -1)
+        cv2.putText(img, "ENTRY ZONE", (x1 + 8, y1 + th + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (20, 20, 20), 2)
+
     def _draw_boxes(self, img: np.ndarray, detections: List[Detection]) -> np.ndarray:
         annotated = img.copy()
+        if self.entry_zone is not None:
+            self._draw_zone(annotated)
         for d in detections:
             x1, y1, x2, y2 = d.bbox
             cv2.rectangle(annotated, (x1, y1), (x2, y2), BOX_COLOR, 4)

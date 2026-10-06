@@ -55,12 +55,23 @@
     filter: brightness(1.1);
 }
 
+/* --fit-reserve: everything on the page that isn't the video, top to bottom
+   (header, paddings, caption, the system stats card). Capping the layout's
+   width at (viewport height - reserve) * 16/9 for the video + 400px for the
+   vehicles column and gaps keeps the whole page - stats included - on one
+   screen without scrolling (e.g. 1920x1080 full screen). Re-measure if the
+   stats card's height changes. The stats card below shares the same width. */
+:root {
+    --fit-reserve: 424px; /* measured 413px at 1920x1080, plus a little slack */
+    --fit-max-width: min(1600px, max(960px, calc((100vh - var(--fit-reserve)) * 16 / 9 + 400px)));
+}
+
 .traffic-layout {
     display: grid;
     grid-template-columns: 1fr 340px;
     gap: 20px;
-    padding: 20px;
-    max-width: 1600px;
+    padding: 20px 20px 16px;
+    max-width: var(--fit-max-width);
     margin: 0 auto;
 }
 
@@ -155,6 +166,10 @@
     border: 1px solid var(--border-color);
     border-radius: 8px;
     overflow: hidden;
+    /* Height is pinned to the video's in traffic.js (ResizeObserver), so the
+       list scrolls inside a panel exactly as tall as the video; this is just
+       the fallback until that runs */
+    align-self: start;
     max-height: calc(100vh - 160px);
 }
 
@@ -256,6 +271,8 @@
 }
 
 .tracked-list {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 8px;
     display: flex;
@@ -440,4 +457,230 @@
 
 .detail-modal-caption-area .tracked-item-caption {
     font-size: var(--font-base);
+}
+
+/* Telemetry card along the bottom, same width as the layout above. The card
+   itself (#systemStatsCard, .stats-grid, .stat-card, rings, thermal) is
+   styled by style.css exactly as on the main demo; only the Accelerators
+   card is new here. */
+.traffic-stats {
+    max-width: var(--fit-max-width);
+    margin: 0 auto;
+    padding: 0 20px 16px;
+}
+
+/* A slightly more compact version of the main demo's card, so it fits under
+   the video on one screen */
+.traffic-stats .result-card {
+    margin-bottom: 0;
+    resize: none;
+    min-height: 0;
+    padding: 14px 16px;
+}
+
+.traffic-stats .result-header {
+    margin-bottom: 10px;
+}
+
+.traffic-stats .stat-card {
+    padding: 10px 14px;
+}
+
+.traffic-stats .stat-header {
+    margin-bottom: 6px;
+}
+
+.traffic-stats .ring-gauge-wrapper {
+    width: 84px;
+    height: 84px;
+}
+
+.traffic-stats .sparkline {
+    height: 30px;
+}
+
+.traffic-stats .thermal-chart {
+    height: 64px;
+}
+
+/* Accelerators: GPU / NPU busy, two compact rings side by side */
+.accel-card {
+    min-width: 280px;
+}
+
+.accel-rings {
+    display: flex;
+    justify-content: space-around;
+    gap: var(--space-2);
+}
+
+.accel-ring {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.ring-gauge-wrapper.accel,
+.traffic-stats .ring-gauge-wrapper.accel {
+    width: 72px;
+    height: 72px;
+}
+
+.stat-value.accel-value {
+    font-size: var(--font-md);
+}
+
+.ring-fill.gpu {
+    stroke: var(--thermal-igpu);
+}
+
+.ring-fill.npu {
+    stroke: var(--thermal-npu);
+}
+
+.ring-fill.gpu.high {
+    stroke: var(--warning-color);
+}
+
+/* No warning colour on the NPU: it sits at 100% for the whole of every VLM
+   description, which is normal, not a problem */
+.ring-fill.npu.high {
+    stroke: var(--thermal-npu);
+}
+
+.accel-caption {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    margin-bottom: var(--space-1);
+}
+
+/* Header full-screen toggle (same look as the main demo's header icon buttons) */
+.page-fullscreen-btn {
+    margin-left: 10px;
+}
+
+.page-fullscreen-btn .lucide {
+    width: 16px;
+    height: 16px;
+}
+
+/* Header: theme toggle sits with the other header buttons */
+.traffic-theme-toggle {
+    margin-left: 10px;
+}
+
+.traffic-theme-toggle .lucide,
+.page-fullscreen-btn .lucide {
+    width: 16px;
+    height: 16px;
+}
+
+/* Settings drawer - slides in from the right over the page, so opening it
+   never reflows the video / stats layout */
+.settings-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 1100; /* above the sticky header (1000) */
+}
+
+.settings-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 340px;
+    max-width: 100vw;
+    display: flex;
+    flex-direction: column;
+    background: var(--card-bg);
+    border-left: 1px solid var(--border-color);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 1101;
+}
+
+.settings-drawer.open {
+    transform: translateX(0);
+}
+
+.settings-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: var(--font-md);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.settings-drawer-close {
+    position: static;
+}
+
+.settings-drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 18px 18px;
+}
+
+.settings-group {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.settings-group:last-child {
+    border-bottom: none;
+}
+
+.settings-group-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+.settings-drawer label {
+    display: block;
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    margin: 10px 0 4px;
+}
+
+.settings-drawer select,
+.settings-drawer input[type="file"] {
+    width: 100%;
+    padding: 7px 8px;
+    font-size: var(--font-sm);
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.settings-hint {
+    font-size: var(--font-xs);
+    color: var(--text-muted);
+    margin-top: 5px;
+    line-height: 1.4;
+}
+
+.settings-hint.error {
+    color: var(--error-color);
+}
+
+.settings-apply {
+    width: 100%;
+    margin-top: 14px;
+    padding: 8px 12px;
+    font-size: var(--font-sm);
 }

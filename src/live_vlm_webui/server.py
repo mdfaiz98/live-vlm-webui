@@ -22,6 +22,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -74,7 +75,27 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 TRAFFIC_MODEL_PATH = _REPO_ROOT / "models" / "yolo26n_det_qcs9075.tflite"
 TRAFFIC_LABELS_PATH = _REPO_ROOT / "models" / "coco_labels.txt"
 TRAFFIC_VIDEO_PATH = _REPO_ROOT / "demo_assets" / "car-highway.mp4"
-yolo_detector = None  # Loaded once at startup (HTP delegate warmup is ~1-2s) - see on_startup
+TRAFFIC_MODELS_DIR = _REPO_ROOT / "models"
+TRAFFIC_VIDEOS_DIR = _REPO_ROOT / "demo_assets"
+# Entry zone per demo video (x1, y1, x2, y2 as fractions of the frame) - only
+# vehicles inside it are drawn and logged (see DetectionVideoTrack.entry_zone).
+# The parking clip's zone is the ground in front of the barrier: street traffic
+# behind it has box bottoms at y < 0.27, cars at/through the barrier at
+# y >= 0.3, and the car parked at the right edge sits at x > 0.9 (measured from
+# every detection in the clip). Videos not listed use the whole frame.
+TRAFFIC_ENTRY_ZONES = {
+    "parking-entrance-barrier.mp4": (0.15, 0.28, 0.80, 1.0),
+}
+TRAFFIC_VIDEO_NAMES = {
+    "car-highway.mp4": "Highway traffic",
+    "parking-entrance-barrier.mp4": "Parking entrance (barrier)",
+}
+yolo_detector = None  # The active detector - loaded at startup (HTP delegate warmup is ~1-2s) - see on_startup
+# Settings drawer: every .tflite in models/ is selectable as the detection
+# model (all share coco_labels.txt and the YOLO26 export's boxes/scores/
+# class_idx outputs). Loaded on first use, then kept so switching back is instant.
+traffic_detectors = {}  # model file name -> YoloDetector
+traffic_detection_model_id = TRAFFIC_MODEL_PATH.name
 traffic_websockets = set()  # Track active WebSocket connections for the /traffic page
 # The single-worker detection executor (see detection_processor.py) means
 # multiple simultaneous /traffic connections serialize against each other
@@ -107,10 +128,15 @@ TRAFFIC_MIN_OFFER_INTERVAL_SECONDS = 2.0
 traffic_vlm_service: Optional[VLMService] = None
 traffic_track_store: "OrderedDict[str, dict]" = OrderedDict()
 TRAFFIC_TRACK_STORE_MAX = 200
+# Plate on its own line, with an explicit "not readable" answer: with only
+# "don't guess" Qwen3-VL invented a plate for a car whose plate was behind the
+# parking barrier arm; with this wording it says "not readable" there, and
+# reads the plate (and brand) once the car is clear.
 TRAFFIC_CAPTION_DEFAULT_PROMPT = (
-    "Describe this vehicle in 1-2 sentences: its color, type (car/truck/bus/etc.), "
-    "and brand if visible. Only mention the license plate if it is clearly legible - "
-    "don't guess at characters you can't read clearly."
+    "Describe this vehicle in one sentence: color, type (car/SUV/van/truck/etc.) and brand "
+    "if visible. Then on a new line write 'Plate: ' followed by the license plate exactly as "
+    "shown, only if every character is clearly readable. If the plate is blocked, blurry, "
+    "cut off or partly hidden, write 'Plate: not readable'. Never guess."
 )
 # The active prompt - editable at runtime from the /traffic page (see
 # "update_prompt" in traffic_websocket_handler); TRAFFIC_CAPTION_DEFAULT_PROMPT
@@ -365,6 +391,10 @@ def broadcast_traffic_detections(tracks, crops, crops_large, frame_width, frame_
             "label": t.label,
             "score": t.best_score,
             "best_crop": t.best_crop,  # full-res ndarray, not the shrunk thumbnail
+            # The tracker keeps refining t.best_crop after the card appears (e.g. a
+            # car that waited behind the barrier arm, then drove through closer) -
+            # Describe uses that latest crop, see caption_traffic_vehicle
+            "track": t,
             "caption": None,
             "caption_pending": False,
         }
@@ -429,7 +459,8 @@ async def caption_traffic_vehicle(track_id: str):
 
     async with traffic_caption_lock:
         try:
-            image = Image.fromarray(cv2.cvtColor(entry["best_crop"], cv2.COLOR_BGR2RGB))
+            crop = entry["track"].best_crop if entry["track"].best_crop is not None else entry["best_crop"]
+            image = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
             caption = await traffic_vlm_service.analyze_image(image, prompt=traffic_caption_prompt)
             if caption.startswith("Error:"):
                 raise RuntimeError(caption)
@@ -441,6 +472,84 @@ async def caption_traffic_vehicle(track_id: str):
             traffic_caption_last_failure_at = time.time()
             entry["caption_pending"] = False
             broadcast_traffic_caption_status(track_id, "error", "Description failed")
+
+
+def traffic_list_detection_models():
+    """Selectable detection models: every .tflite in models/, e.g.
+    yolo26n_det_qcs9075.tflite -> "YOLO26n"."""
+    models = []
+    for path in sorted(TRAFFIC_MODELS_DIR.glob("*.tflite")):
+        m = re.match(r"(yolo)(v?\d+)([nsmlx])", path.stem, re.IGNORECASE)
+        name = f"YOLO{m.group(2)}{m.group(3).lower()}" if m else path.stem
+        models.append({"id": path.name, "name": name})
+    return models
+
+
+def traffic_get_detector(model_id: str) -> YoloDetector:
+    """Load (once) and return the detector for a models/ file. Blocking - call
+    via run_in_executor."""
+    if model_id not in traffic_detectors:
+        traffic_detectors[model_id] = YoloDetector(
+            model_path=str(TRAFFIC_MODELS_DIR / model_id),
+            labels_path=str(TRAFFIC_LABELS_PATH),
+            backend="htp",
+        )
+    return traffic_detectors[model_id]
+
+
+def traffic_list_videos():
+    """Videos selectable as the /traffic source: the files in demo_assets/."""
+    if not TRAFFIC_VIDEOS_DIR.is_dir():
+        return []
+    return [
+        {"id": str(path), "name": TRAFFIC_VIDEO_NAMES.get(path.name, path.stem.replace("-", " ").capitalize())}
+        for path in sorted(TRAFFIC_VIDEOS_DIR.iterdir())
+        if path.is_file() and path.suffix.lower() in ALLOWED_VIDEO_EXTENSIONS
+    ]
+
+
+async def traffic_settings(request):
+    """GET /api/traffic/settings - options + current values for the settings drawer."""
+    vlm_models = []
+    if traffic_vlm_service is not None:
+        try:
+            listed = await traffic_vlm_service.client.models.list()
+            # GenieX advertises a precision tag ("...:W4A16") the proxy strips anyway
+            vlm_models = sorted({m.id.split(":")[0] for m in listed.data})
+        except Exception as e:
+            logger.warning(f"[traffic] Could not list VLM models: {e}")
+        if traffic_vlm_service.model not in vlm_models:
+            vlm_models.insert(0, traffic_vlm_service.model)
+    return web.json_response(
+        {
+            "detection_models": traffic_list_detection_models(),
+            "detection_model": traffic_detection_model_id,
+            "vlm_models": [{"id": m, "name": m.split("/")[-1]} for m in vlm_models],
+            "vlm_model": traffic_vlm_service.model if traffic_vlm_service else None,
+            "videos": traffic_list_videos(),
+            "default_video": str(TRAFFIC_VIDEO_PATH),
+        }
+    )
+
+
+async def traffic_set_detection_model(model_id: str):
+    """Switch the active detection model (settings drawer), live if streaming."""
+    global yolo_detector, traffic_detection_model_id
+    if model_id not in {m["id"] for m in traffic_list_detection_models()}:
+        return
+    try:
+        detector = await asyncio.get_event_loop().run_in_executor(None, traffic_get_detector, model_id)
+    except Exception as e:
+        logger.error(f"[traffic] Failed to load detection model {model_id}: {e}")
+        message = {"type": "settings_error", "text": f"Could not load {model_id}"}
+    else:
+        yolo_detector, traffic_detection_model_id = detector, model_id
+        if traffic_active_processor_track is not None:
+            traffic_active_processor_track.detector = detector
+        logger.info(f"[traffic] Detection model set to {model_id}")
+        message = {"type": "settings_updated", "detection_model": model_id}
+    for ws in list(traffic_websockets):
+        asyncio.create_task(ws.send_json(message))
 
 
 async def traffic_websocket_handler(request):
@@ -481,6 +590,17 @@ async def traffic_websocket_handler(request):
                     track_id = data.get("id")
                     if track_id:
                         asyncio.create_task(caption_traffic_vehicle(track_id))
+                elif msg_type == "set_detection_model":
+                    asyncio.create_task(traffic_set_detection_model(data.get("id", "")))
+                elif msg_type == "set_vlm_model" and traffic_vlm_service is not None:
+                    model_id = (data.get("id") or "").strip()
+                    if model_id:
+                        traffic_vlm_service.model = model_id
+                        logger.info(f"[traffic] VLM model set to {model_id}")
+                        for other_ws in list(traffic_websockets):
+                            asyncio.create_task(
+                                other_ws.send_json({"type": "settings_updated", "vlm_model": model_id})
+                            )
                 elif msg_type == "update_prompt":
                     new_prompt = (data.get("prompt") or "").strip()
                     if new_prompt:
@@ -505,10 +625,11 @@ async def traffic_websocket_handler(request):
 
 
 async def traffic_offer(request):
-    """Handle WebRTC offer for the /traffic cascade demo. Always uses the
-    looping car-highway.mp4 clip wrapped with object detection - no
-    webcam/RTSP/session selection. Kept deliberately separate from the
-    normal demo's offer()/VLM flow (see CLAUDE.md)."""
+    """Handle WebRTC offer for the /traffic cascade demo, wrapping the chosen
+    source video with object detection. The video (settings drawer) is any
+    file from traffic_list_videos(), looped (default: car-highway.mp4).
+    Kept deliberately separate from the normal demo's offer()/VLM flow (see
+    CLAUDE.md)."""
     if yolo_detector is None:
         return web.Response(
             status=503,
@@ -553,6 +674,9 @@ async def traffic_offer(request):
 
     params = await request.json()
     offer_sdp = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+    video_path = params.get("video") or str(TRAFFIC_VIDEO_PATH)
+    if video_path not in {v["id"] for v in traffic_list_videos()}:
+        return web.json_response({"error": "Unknown video file"}, status=400)
 
     config = RTCConfiguration(iceServers=[])
     pc = RTCPeerConnection(configuration=config)
@@ -576,7 +700,7 @@ async def traffic_offer(request):
                 traffic_active_processor_track = None
 
     try:
-        video_track = VideoFileTrack(str(TRAFFIC_VIDEO_PATH), loop=True)
+        video_track = VideoFileTrack(video_path, loop=True)
         video_cleanup_track = video_track
         traffic_active_video_track = video_track
     except Exception as e:
@@ -599,6 +723,7 @@ async def traffic_offer(request):
     processor_track = DetectionVideoTrack(
         relayed_video, yolo_detector, detection_callback=broadcast_traffic_detections
     )
+    processor_track.entry_zone = TRAFFIC_ENTRY_ZONES.get(Path(video_path).name)
     traffic_active_processor_track = processor_track
     pc.addTrack(processor_track)
 
@@ -907,11 +1032,17 @@ def broadcast_text_update(text: str, metrics: dict):
 
 
 def broadcast_gpu_stats(stats: dict):
-    """Broadcast GPU stats to all connected WebSocket clients"""
-    if not websockets:
+    """Broadcast GPU stats to all connected WebSocket clients (main demo and /traffic)"""
+    if not websockets and not traffic_websockets:
         return
 
     message = json.dumps({"type": "gpu_stats", "stats": stats})
+
+    for ws in list(traffic_websockets):
+        try:
+            asyncio.create_task(ws.send_str(message))
+        except Exception as e:
+            logger.error(f"Error sending GPU stats to traffic websocket: {e}")
 
     # Send to all connected clients
     dead_websockets = set()
@@ -936,10 +1067,12 @@ async def gpu_monitor_loop():
 
     logger.info("GPU monitoring loop started")
 
+    loop = asyncio.get_event_loop()
     try:
         while True:
-            # Get current stats
-            stats = gpu_monitor.get_stats()
+            # Get current stats - off the event loop: reading /proc and sysfs
+            # (~30 ms on the AFE-A503) mustn't delay video frames
+            stats = await loop.run_in_executor(None, gpu_monitor.get_stats)
 
             # Update history with current stats
             gpu_monitor.update_history(stats)
@@ -1373,6 +1506,12 @@ async def on_startup(app):
     # Initialize GPU monitor
     try:
         gpu_monitor = create_monitor()
+        # Qualcomm boards: NPU busy % is our own NPU workloads' time (see
+        # QualcommMonitor) - the YOLO detector's invoke() time plus the time a
+        # VLM request is running on GenieX (Qwen3-VL, also on the NPU), capped
+        # at 100%. Shown in /traffic's system stats.
+        if hasattr(gpu_monitor, "npu_busy_source"):
+            gpu_monitor.npu_busy_source = lambda: YoloDetector.npu_busy_seconds + VLMService.busy_seconds()
         logger.info("GPU monitor initialized")
     except Exception as e:
         logger.error(f"Failed to initialize GPU monitor: {e}")
@@ -1388,11 +1527,7 @@ async def on_startup(app):
     # only disables /traffic; it must never take down the normal demo.
     if TRAFFIC_MODEL_PATH.exists() and TRAFFIC_LABELS_PATH.exists():
         try:
-            yolo_detector = YoloDetector(
-                model_path=str(TRAFFIC_MODEL_PATH),
-                labels_path=str(TRAFFIC_LABELS_PATH),
-                backend="htp",
-            )
+            yolo_detector = traffic_get_detector(TRAFFIC_MODEL_PATH.name)
             logger.info("Traffic detection model loaded - /traffic demo ready")
         except Exception as e:
             logger.error(f"Failed to load traffic detection model: {e}")
@@ -1492,6 +1627,7 @@ async def create_app(test_mode=False):
     app.router.add_get("/traffic.js", traffic_script)
     app.router.add_get("/api/traffic/ws", traffic_websocket_handler)
     app.router.add_post("/api/traffic/offer", traffic_offer)
+    app.router.add_get("/api/traffic/settings", traffic_settings)
 
     # RTSP endpoints
     app.router.add_post("/api/rtsp/start", rtsp_start)

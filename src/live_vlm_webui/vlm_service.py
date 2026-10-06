@@ -25,7 +25,7 @@ import io
 import time
 from openai import AsyncOpenAI
 from PIL import Image
-from typing import Optional
+from typing import Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,18 @@ logger = logging.getLogger(__name__)
 
 class VLMService:
     """Service for analyzing images using VLM via OpenAI-compatible API"""
+
+    # Process-wide VLM request time (all instances), for the system monitor's
+    # VLM busy % on /traffic: finished requests' total plus the start times of
+    # requests still in flight, so a long request shows up while it runs.
+    _busy_done_seconds: float = 0.0
+    _inflight_since: Dict[int, float] = {}
+
+    @classmethod
+    def busy_seconds(cls) -> float:
+        now = time.perf_counter()
+        # list() snapshot: called from the monitor's worker thread while the event loop may add/remove
+        return cls._busy_done_seconds + sum(now - t for t in list(cls._inflight_since.values()))
 
     def __init__(
         self,
@@ -145,9 +157,16 @@ class VLMService:
             }
 
             # Call API
-            response = await self.client.chat.completions.create(
-                model=self.model, messages=messages, max_tokens=self.max_tokens, temperature=0.7
-            )
+            request_key = id(messages)
+            VLMService._inflight_since[request_key] = time.perf_counter()
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.model, messages=messages, max_tokens=self.max_tokens, temperature=0.7
+                )
+            finally:
+                VLMService._busy_done_seconds += time.perf_counter() - VLMService._inflight_since.pop(
+                    request_key
+                )
 
             # Store response payload for debug (serialize to dict)
             try:

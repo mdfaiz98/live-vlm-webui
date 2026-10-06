@@ -65,6 +65,11 @@ class YoloDetector:
 
     INPUT_SIZE = 640  # fixed at export time; this model was compiled for 640x640 only
 
+    # Cumulative invoke() time on the Hexagon NPU, process-wide. The system
+    # monitor turns it into an NPU busy % for /traffic's telemetry - the NPU has
+    # no readable utilization counter. Only touched from the detection thread.
+    npu_busy_seconds: float = 0.0
+
     def __init__(
         self,
         model_path: str,
@@ -170,7 +175,10 @@ class YoloDetector:
 
         input_tensor = (canvas.astype(np.float32) / 255.0)[np.newaxis, ...]
         self.interpreter.set_tensor(self._input_index, input_tensor)
+        t0 = time.perf_counter()
         self.interpreter.invoke()
+        if self.backend == "htp":
+            YoloDetector.npu_busy_seconds += time.perf_counter() - t0
 
         # boxes: [8400, 4] xyxy in 640x640 model-input space; scores/class_idx: [8400]
         boxes = self.interpreter.get_tensor(self._output_indices["boxes"])[0]

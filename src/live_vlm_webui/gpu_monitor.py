@@ -25,8 +25,9 @@ import psutil
 import re
 import socket
 import subprocess
+import time
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, List
+from typing import Callable, Dict, List, Optional
 from collections import deque
 
 logger = logging.getLogger(__name__)
@@ -110,10 +111,11 @@ def get_thermal_stats() -> Dict[str, Optional[float]]:
     (/sys/class/thermal/thermal_zone*/{type,temp}).
 
     This is generic Linux sysfs, not vendor-specific - on Qualcomm Snapdragon/
-    Dragonwing boards (e.g. QCS9075M) the zone names typically look like:
-        cpu-*-thermal    -> CPU cores
-        gpuss-*-thermal  -> Adreno GPU
-        nsp-*-thermal    -> Hexagon NPU ("NSP" = Neural Signal Processor)
+    Dragonwing boards the zone names vary by SoC, so prefixes are matched loosely:
+        QCS9075M:  cpu-*-thermal, gpuss-*-thermal, nsp-*-thermal
+        QCS6490:   cpu0-thermal / cpuss0-thermal, gpuss0-thermal, nspss0-thermal
+    cpu* -> CPU cores, gpu* -> Adreno GPU, nsp* -> Hexagon NPU
+    ("NSP" = Neural Signal Processor).
 
     Each group is averaged across however many zones match. Returns None for
     any group with no matching zones (e.g. non-Linux, or a board that doesn't
@@ -146,11 +148,11 @@ def get_thermal_stats() -> Dict[str, Optional[float]]:
             except Exception:
                 continue
 
-            if zone_type.startswith("cpu-"):
+            if zone_type.startswith("cpu"):
                 groups["cpu_temp_c"].append(temp_c)
-            elif zone_type.startswith("gpuss-") or zone_type.startswith("gpu-"):
+            elif zone_type.startswith("gpu"):
                 groups["gpu_temp_c"].append(temp_c)
-            elif zone_type.startswith("nsp-"):
+            elif zone_type.startswith("nsp"):
                 groups["npu_temp_c"].append(temp_c)
     except Exception as e:
         logger.debug(f"Error reading thermal zones: {e}")
@@ -214,9 +216,11 @@ def get_qualcomm_soc_info() -> Dict[str, Optional[str]]:
         with open("/proc/device-tree/model", "rb") as f:
             model = f.read().split(b"\x00")[0].decode("utf-8", errors="ignore").strip()
         if model:
-            m = re.search(r"\bAIR\s*-?\s*(\d+)\b", model, re.IGNORECASE)
+            # "...AIR055 A1" -> "Advantech AIR-055", "...ASRD501-A1 Platform" -> "Advantech ASR-D501",
+            # "...AFEA503 A1" -> "Advantech AFE-A503"
+            m = re.search(r"\b(AIR|ASR|AFE)\s*-?\s*([A-Z]?\d+)", model, re.IGNORECASE)
             if "advantech" in model.lower() and m:
-                result["qc_board_name"] = f"Advantech AIR-{m.group(1)}"
+                result["qc_board_name"] = f"Advantech {m.group(1).upper()}-{m.group(2).upper()}"
             else:
                 result["qc_board_name"] = model
     except Exception as e:
@@ -234,6 +238,8 @@ def get_qualcomm_soc_info() -> Dict[str, Optional[str]]:
     soc_family_display_name = {
         "qcs9075": "IQ9",
         "sa8775p": "IQ9",
+        "qcs6490": "QCS6490",
+        "qcm6490": "QCS6490",
     }
     for entry in qcom_entries:
         key = entry.split(",", 1)[1].lower()
@@ -249,6 +255,8 @@ def get_qualcomm_soc_info() -> Dict[str, Optional[str]]:
     soc_family_gfx = {
         "sa8775p": ("Adreno 663 GPU", "Hexagon NPU"),
         "qcs9075": ("Adreno 663 GPU", "Hexagon NPU"),
+        "qcs6490": ("Adreno 643 GPU", "Hexagon NPU (HTP v68)"),
+        "qcm6490": ("Adreno 643 GPU", "Hexagon NPU (HTP v68)"),
     }
     for entry in qcom_entries:
         key = entry.split(",", 1)[1].lower()
@@ -273,13 +281,26 @@ def get_qualcomm_soc_info() -> Dict[str, Optional[str]]:
         "0xd47": "ARM Cortex-A710",
         "0xd48": "ARM Cortex-X2",
     }
+    # big.LITTLE SoCs (e.g. QCS6490: 4x A78 + 4x A55) list several core types,
+    # so count every core rather than reporting only the first one seen.
     try:
+        part_counts: Dict[str, int] = {}
         with open("/proc/cpuinfo", "r") as f:
             for line in f:
                 if line.lower().startswith("cpu part"):
                     part = line.split(":")[-1].strip().lower()
-                    result["qc_cpu_model"] = arm_part_names.get(part, f"ARM core ({part})")
-                    break
+                    part_counts[part] = part_counts.get(part, 0) + 1
+        if part_counts:
+            names = [
+                (arm_part_names.get(p, f"ARM core ({p})"), n) for p, n in part_counts.items()
+            ]
+            if len(names) == 1:
+                result["qc_cpu_model"] = names[0][0]
+            else:
+                # Biggest cores first, e.g. "4x ARM Cortex-A78 + 4x ARM Cortex-A55"
+                order = list(arm_part_names.values())
+                names.sort(key=lambda x: order.index(x[0]) if x[0] in order else len(order))
+                result["qc_cpu_model"] = " + ".join(f"{n}x {name}" for name, n in names)
     except Exception as e:
         logger.debug(f"Could not read /proc/cpuinfo for CPU part: {e}")
 
@@ -1621,6 +1642,143 @@ class JetsonOrinMonitor(GPUMonitor):
                 logger.warning(f"Error closing jtop: {e}")
 
 
+class QualcommMonitor(GPUMonitor):
+    """Qualcomm Linux boards (upstream msm DRM driver, e.g. QCS6490, QCS9075): GPU busy %
+    from the driver's per-client busy time and GPU clock from devfreq; NPU busy %
+    from the app's own inference time (set npu_busy_source), as the NPU exposes no
+    readable utilization counter here.
+
+    GPU busy % is the sum over all DRM clients (desktop, browser, this app) of
+    the change in /proc/<pid>/fdinfo "drm-engine-gpu" (ns) per wall-clock time -
+    the same method as nvtop / gputop.
+    """
+
+    WINDOW_S = 1.0  # average utilization over this much recent time
+    RESCAN_S = 10.0  # how often to look for new DRM clients
+
+    def __init__(self, devfreq_dir: str, history_size: int = 60):
+        super().__init__(history_size)
+        self.devfreq_dir = devfreq_dir
+        self.npu_util_history = deque(maxlen=history_size)
+        self.npu_busy_source: Optional[Callable[[], float]] = None
+        self._client_files: List[str] = []
+        self._last_scan = 0.0
+        self._last_gpu_ns: Dict[str, int] = {}
+        self._last_npu_s: Optional[float] = None
+        self._last_t: Optional[float] = None
+        self._samples: deque = deque()  # (dt, gpu_busy_s, npu_busy_s)
+        self.max_freq_mhz = self._read_mhz("max_freq")
+        logger.info(f"Qualcomm monitor: GPU devfreq {devfreq_dir}, max {self.max_freq_mhz} MHz")
+
+    def _read_mhz(self, name: str) -> Optional[float]:
+        try:
+            with open(os.path.join(self.devfreq_dir, name)) as f:
+                return int(f.read()) / 1e6
+        except (OSError, ValueError):
+            return None
+
+    def _scan_clients(self):
+        """fdinfo files of open DRM device fds (msm driver) in readable processes."""
+        found = []
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit():
+                continue
+            fd_dir = f"/proc/{pid}/fd"
+            try:
+                fds = os.listdir(fd_dir)
+            except OSError:
+                continue
+            for fd in fds:
+                try:
+                    if os.readlink(f"{fd_dir}/{fd}").startswith("/dev/dri/"):
+                        found.append(f"/proc/{pid}/fdinfo/{fd}")
+                except OSError:
+                    continue
+        self._client_files = found
+        self._last_scan = time.monotonic()
+
+    def _gpu_busy_ns(self) -> Dict[str, int]:
+        """Cumulative GPU busy ns per DRM client id (dup'd fds share an id)."""
+        if time.monotonic() - self._last_scan > self.RESCAN_S:
+            self._scan_clients()
+        totals: Dict[str, int] = {}
+        for path in self._client_files:
+            try:
+                with open(path) as f:
+                    text = f.read()
+            except OSError:
+                continue  # process or fd went away; the next rescan drops it
+            client, busy = None, None
+            for line in text.splitlines():
+                if line.startswith("drm-client-id:"):
+                    client = line.split(":", 1)[1].strip()
+                elif line.startswith("drm-engine-gpu:"):
+                    busy = int(line.split(":", 1)[1].split()[0])
+            if client is not None and busy is not None:
+                totals[client] = busy
+        return totals
+
+    def get_stats(self) -> Dict:
+        now = time.monotonic()
+        gpu_ns = self._gpu_busy_ns()
+        npu_s = self.npu_busy_source() if self.npu_busy_source else None
+
+        if self._last_t is not None:
+            dt = now - self._last_t
+            # Only clients seen in both samples: a new client's lifetime total is not this interval's work
+            gpu_busy = sum(v - self._last_gpu_ns[c] for c, v in gpu_ns.items() if c in self._last_gpu_ns) / 1e9
+            npu_busy = (npu_s - self._last_npu_s) if npu_s is not None and self._last_npu_s is not None else 0.0
+            self._samples.append((dt, max(0.0, gpu_busy), max(0.0, npu_busy)))
+            while sum(x[0] for x in self._samples) > self.WINDOW_S and len(self._samples) > 1:
+                self._samples.popleft()
+        self._last_t, self._last_gpu_ns, self._last_npu_s = now, gpu_ns, npu_s
+
+        span = sum(x[0] for x in self._samples)
+        pct = lambda i: min(100.0, 100.0 * sum(x[i] for x in self._samples) / span) if span > 0 else 0.0
+
+        return {
+            "platform": "Qualcomm",
+            "gpu_name": "Adreno GPU",
+            "product_name": "",
+            "gpu_percent": pct(1),
+            "gpu_freq_mhz": self._read_mhz("cur_freq"),
+            "gpu_max_freq_mhz": self.max_freq_mhz,
+            "npu_percent": pct(2) if self.npu_busy_source else None,
+            "vram_used_gb": 0,
+            "vram_total_gb": 0,
+            "vram_percent": 0,
+            "temp_c": None,
+            "power_w": None,
+            **self.get_cpu_ram_stats(),
+        }
+
+    def update_history(self, stats: Dict):
+        super().update_history(stats)
+        self.npu_util_history.append(stats.get("npu_percent") or 0)
+
+    def get_history(self) -> Dict[str, List[float]]:
+        history = super().get_history()
+        history["npu_util"] = list(self.npu_util_history)
+        return history
+
+    def cleanup(self):
+        pass
+
+
+def find_qualcomm_gpu_devfreq() -> Optional[str]:
+    """devfreq dir of a Qualcomm Adreno GPU (e.g. /sys/class/devfreq/3d00000.gpu)."""
+    try:
+        with open("/proc/device-tree/compatible", "rb") as f:
+            if b"qcom" not in f.read():
+                return None
+        for name in sorted(os.listdir("/sys/class/devfreq")):
+            if name.endswith(".gpu"):
+                return os.path.join("/sys/class/devfreq", name)
+    except OSError:
+        pass
+    return None
+
+
 def create_monitor(platform: Optional[str] = None) -> GPUMonitor:
     """
     Factory function to create appropriate GPU monitor
@@ -1639,6 +1797,13 @@ def create_monitor(platform: Optional[str] = None) -> GPUMonitor:
         return JetsonOrinMonitor()
     if platform == "apple" or platform == "apple_silicon":
         return AppleSiliconMonitor()
+
+    # Auto-detect Qualcomm Linux boards (Adreno GPU on the upstream msm driver)
+    if platform in (None, "qualcomm"):
+        devfreq = find_qualcomm_gpu_devfreq()
+        if devfreq:
+            logger.info("Auto-detected Qualcomm board - using QualcommMonitor")
+            return QualcommMonitor(devfreq)
 
     # Auto-detect macOS / Apple Silicon
     import platform as platform_module
