@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Click-to-Describe sequence</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper: #f5f5f5; --color-ink: #2d3142; --color-muted: #4f5d75; --color-accent: #eb6c36;
+      --font-sans: 'Geist', system-ui, sans-serif;
+      --font-serif: 'Instrument Serif', serif;
+      --font-mono: 'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink);
+           min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2.5rem 2rem; }
+    .frame { max-width: 1280px; width: 100%; min-width: 0; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500; letter-spacing: 0.18em;
+               text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.75rem, 2.6vw + 0.75rem, 2.5rem); font-weight: 400;
+          letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 0.4rem; }
+    .subtitle { color: var(--color-muted); font-size: 0.95rem; margin-bottom: 1.25rem; }
+    .subtitle code { font-family: var(--font-mono); font-size: 0.85em; }
+    .nav { margin-top: 1rem; font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.08em; color: var(--color-muted); }
+    .nav a { color: #2e5aa8; text-decoration: none; margin-right: 1.25rem; }
+    svg { width: 100%; min-width: 1280px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Detail · Stage 2 · Vision-language</p>
+    <h1>Click a vehicle → Qwen3-VL describes it</h1>
+    <p class="subtitle">One caption at a time (lock), 25 s client timeout, 40 s cooldown after a failure so abandoned GenieX requests can't pile up.</p>
+    <div class="diagram-container">
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cascade-describe-title cascade-describe-desc">
+<title id="cascade-describe-title">Click-to-Describe sequence</title>
+<desc id="cascade-describe-desc">Sequence of a Describe click: the browser asks the WebUI server over WebSocket, the server checks its cooldown and lock, sends the vehicle&#x27;s best crop through the GenieX proxy to Qwen3-VL-4B on the NPU, and returns the caption, or after a 25 second timeout returns an error and starts a 40 second cooldown.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker><marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker><marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker><marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker></defs>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<rect x="136" y="452" width="928" height="176" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/><rect x="136" y="452" width="40" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)" stroke-width="1"/><text x="156" y="464" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.12em">ALT</text><text x="188" y="464" fill="#4f5d75" font-size="11" font-family="'Geist Mono', monospace" letter-spacing="0.04em">[reply within 25 s]</text><line x1="144" y1="560" x2="1056" y2="560" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/><text x="148" y="578" fill="#4f5d75" font-size="11" font-family="'Geist Mono', monospace" letter-spacing="0.04em">[timeout or error]</text>
+<path d="M 164,208 H 456" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+<path d="M 464,224 H 492 Q 500,224 500,232 V 240 Q 500,248 492,248 H 468" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 456,280 H 164" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-open)"/>
+<path d="M 464,312 H 756" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+<path d="M 764,328 H 792 Q 800,328 800,336 V 344 Q 800,352 792,352 H 768" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 764,392 H 1036" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+<path d="M 1044,408 H 1072 Q 1080,408 1080,416 V 424 Q 1080,432 1072,432 H 1048" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+<path d="M 1036,496 H 764" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+<path d="M 756,520 H 464" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+<path d="M 456,544 H 164" fill="none" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<path d="M 456,616 H 164" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+<rect x="250" y="186" width="120" height="16" rx="2" fill="#f5f5f5"/><text x="310" y="198" fill="#2e5aa8" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">DESCRIBE {ID}</text>
+<rect x="512" y="228" width="120" height="16" rx="2" fill="#f5f5f5"/><text x="572" y="240" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COOLDOWN·LOCK</text>
+<rect x="274" y="258" width="72" height="16" rx="2" fill="#f5f5f5"/><text x="310" y="270" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PENDING</text>
+<rect x="550" y="290" width="120" height="16" rx="2" fill="#f5f5f5"/><text x="610" y="302" fill="#2e5aa8" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">POST /V1/CHAT</text>
+<rect x="812" y="332" width="112" height="16" rx="2" fill="#f5f5f5"/><text x="868" y="344" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">STRIP :W4A16</text>
+<rect x="840" y="370" width="120" height="16" rx="2" fill="#f5f5f5"/><text x="900" y="382" fill="#2e5aa8" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CROP + PROMPT</text>
+<rect x="1092" y="412" width="128" height="16" rx="2" fill="#f5f5f5"/><text x="1156" y="424" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">QWEN3-VL · NPU</text>
+<rect x="852" y="474" width="96" height="16" rx="2" fill="#f5f5f5"/><text x="900" y="486" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">COMPLETION</text>
+<rect x="574" y="498" width="72" height="16" rx="2" fill="#f5f5f5"/><text x="610" y="510" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CAPTION</text>
+<rect x="254" y="522" width="112" height="16" rx="2" fill="#f5f5f5"/><text x="310" y="534" fill="#eb6c36" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CAPTION DONE</text>
+<rect x="250" y="594" width="120" height="16" rx="2" fill="#f5f5f5"/><text x="310" y="606" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RETRY IN 40 S</text>
+<rect x="40" y="88" width="240" height="64" rx="6" fill="#f5f5f5"/><rect x="40" y="88" width="240" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/><rect x="48" y="96" width="24" height="12" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/><text x="60" y="105" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">UI</text><text x="160" y="126" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Browser</text><text x="160" y="145" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">/traffic page</text>
+<rect x="340" y="88" width="240" height="64" rx="6" fill="#f5f5f5"/><rect x="340" y="88" width="240" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/><rect x="348" y="96" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/><text x="364" y="105" fill="#2d3142" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text><text x="460" y="126" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">WebUI server</text><text x="460" y="145" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">Describe service</text>
+<rect x="640" y="88" width="240" height="64" rx="6" fill="#f5f5f5"/><rect x="640" y="88" width="240" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/><rect x="648" y="96" width="40" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/><text x="668" y="105" fill="#2d3142" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PROXY</text><text x="760" y="126" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">GenieX proxy</text><text x="760" y="145" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">:18182</text>
+<rect x="920" y="88" width="240" height="64" rx="6" fill="#f5f5f5"/><rect x="920" y="88" width="240" height="64" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/><rect x="928" y="96" width="32" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/><text x="944" y="105" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NPU</text><text x="1040" y="126" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Qwen3-VL-4B</text><text x="1040" y="145" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">GenieX :18181 · ~3–10 s</text>
+<line x1="160" y1="152" x2="160" y2="628" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="460" y1="152" x2="460" y2="628" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="760" y1="152" x2="760" y2="628" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<line x1="1040" y1="152" x2="1040" y2="628" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+<rect x="456" y="192" width="8" height="424" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="756" y="296" width="8" height="224" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="1036" y="376" width="8" height="120" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+<line x1="40" y1="644" x2="1240" y2="644" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/><text x="40" y="660" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text><line x1="40" y1="682" x2="64" y2="682" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/><text x="72" y="686" fill="#4f5d75" font-size="11" font-family="'Geist', sans-serif">Request</text><line x1="156" y1="682" x2="180" y2="682" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/><text x="188" y="686" fill="#4f5d75" font-size="11" font-family="'Geist', sans-serif">Return</text><line x1="264" y1="682" x2="288" y2="682" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-open)"/><text x="296" y="686" fill="#4f5d75" font-size="11" font-family="'Geist', sans-serif">Async notify</text><line x1="412" y1="682" x2="436" y2="682" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/><text x="444" y="686" fill="#4f5d75" font-size="11" font-family="'Geist', sans-serif">Caption shown</text><rect x="568" y="676" width="16" height="12" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/><text x="600" y="686" fill="#4f5d75" font-size="11" font-family="'Geist', sans-serif">Runs on the NPU</text>
+</svg>
+    </div>
+    <p class="nav"><a href="cascade-how-it-works.html">How it works</a><a href="cascade-overview.html">1 · System overview</a><a href="cascade-pipeline.html">2 · Per-frame pipeline</a><a href="cascade-describe.html">3 · Click-to-Describe</a></p>
+  </div>
+</body>
+</html>
