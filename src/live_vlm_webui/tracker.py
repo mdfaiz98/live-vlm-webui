@@ -94,6 +94,12 @@ class SimpleVehicleTracker:
 
     def __init__(self):
         self.tracks: List[Track] = []
+        # None: a frame "shrinks" when the box is at all smaller than its peak.
+        # A ratio (e.g. 0.8): only when it's below ratio * peak - so a car that
+        # stops at a parking barrier (box jitters around one size) isn't
+        # reported until it actually drives on, and its reported crop is its
+        # closest view, not the one with the barrier arm across the plate.
+        self.shrink_ratio: Optional[float] = None
 
     def update(self, detections: List[Detection], img: np.ndarray) -> List[Track]:
         """Feed one frame's detections in, along with that same frame's
@@ -140,7 +146,7 @@ class SimpleVehicleTracker:
                 x2, y2 = min(frame_w, x2), min(frame_h, y2)
                 if x2 > x1 and y2 > y1:
                     track.best_crop = img[y1:y2, x1:x2].copy()
-            else:
+            elif self.shrink_ratio is None or area < track.best_area * self.shrink_ratio:
                 track.shrink_count += 1
 
             if (

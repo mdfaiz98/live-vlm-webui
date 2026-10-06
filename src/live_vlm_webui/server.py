@@ -723,7 +723,7 @@ async def traffic_offer(request):
     processor_track = DetectionVideoTrack(
         relayed_video, yolo_detector, detection_callback=broadcast_traffic_detections
     )
-    processor_track.entry_zone = TRAFFIC_ENTRY_ZONES.get(Path(video_path).name)
+    processor_track.set_entry_zone(TRAFFIC_ENTRY_ZONES.get(Path(video_path).name))
     traffic_active_processor_track = processor_track
     pc.addTrack(processor_track)
 

@@ -99,6 +99,13 @@ class DetectionVideoTrack(VideoStreamTrack):
         # behind it. None = the whole frame.
         self.entry_zone: Optional[Tuple[float, float, float, float]] = None
 
+    def set_entry_zone(self, zone: Optional[Tuple[float, float, float, float]]):
+        """Entry zone + its reporting rule: with a zone (a parking entrance),
+        a vehicle is logged once it has clearly moved on from its closest point
+        (box < 80% of its peak), not while it waits at the barrier."""
+        self.entry_zone = zone
+        self.tracker.shrink_ratio = 0.8 if zone is not None else None
+
     def enable_detection(self):
         if not self.detection_enabled:
             self.detection_enabled = True
