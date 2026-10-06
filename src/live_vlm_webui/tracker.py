@@ -100,6 +100,16 @@ class SimpleVehicleTracker:
         # reported until it actually drives on, and its reported crop is its
         # closest view, not the one with the barrier arm across the plate.
         self.shrink_ratio: Optional[float] = None
+        # Entry-zone mode (parking entrance), on top of shrink_ratio:
+        # - a box cut off by the frame edge never becomes the best crop (a car
+        #   half out of the frame gave a thin useless strip),
+        # - the first sighting can be the best crop (a car leaving is biggest
+        #   when it first appears, so "a later, bigger box" never happened and
+        #   it was reported with no crop at all),
+        # - a vehicle with no usable crop is not reported.
+        # Off by default, so other videos keep the original behaviour.
+        self.zone_mode = False
+        self.EDGE_MARGIN = 0.01  # fraction of the frame: a box this close to an edge counts as cut off
 
     def update(self, detections: List[Detection], img: np.ndarray) -> List[Track]:
         """Feed one frame's detections in, along with that same frame's
@@ -135,7 +145,12 @@ class SimpleVehicleTracker:
                 track.confirmed = True
 
             area = _area(best_det.bbox)
-            if area >= track.best_area:
+            if self.zone_mode:
+                usable = not self._cut_off(best_det.bbox, frame_w, frame_h)
+                better = usable and (area >= track.best_area or track.best_crop is None)
+            else:
+                better = area >= track.best_area
+            if better:
                 track.best_bbox = best_det.bbox
                 track.best_score = best_det.score
                 track.best_area = area
@@ -153,6 +168,7 @@ class SimpleVehicleTracker:
                 track.confirmed
                 and not track.emitted
                 and track.shrink_count >= self.SHRINK_CONFIRM_FRAMES
+                and not (self.zone_mode and track.best_crop is None)
             ):
                 track.emitted = True
                 ready.append(track)
@@ -164,7 +180,7 @@ class SimpleVehicleTracker:
                 # completing a clean shrink-after-peak - report it anyway
                 # using whatever the best crop we did see was, rather than
                 # losing the sighting entirely.
-                if track.confirmed and not track.emitted:
+                if track.confirmed and not track.emitted and not (self.zone_mode and track.best_crop is None):
                     track.emitted = True
                     ready.append(track)
             else:
@@ -172,6 +188,20 @@ class SimpleVehicleTracker:
         self.tracks = still_alive
 
         for det in unmatched:
-            self.tracks.append(Track(label=det.label, bbox=det.bbox, score=det.score))
+            track = Track(label=det.label, bbox=det.bbox, score=det.score)
+            if self.zone_mode:
+                if self._cut_off(det.bbox, frame_w, frame_h):
+                    track.best_area = 0  # let the first whole view become the best crop
+                else:
+                    x1, y1, x2, y2 = det.bbox
+                    crop = img[max(0, y1):min(frame_h, y2), max(0, x1):min(frame_w, x2)]
+                    if crop.size:
+                        track.best_crop = crop.copy()
+            self.tracks.append(track)
 
         return ready
+
+    def _cut_off(self, bbox, frame_w: int, frame_h: int) -> bool:
+        x1, y1, x2, y2 = bbox
+        mx, my = self.EDGE_MARGIN * frame_w, self.EDGE_MARGIN * frame_h
+        return x1 <= mx or y1 <= my or x2 >= frame_w - mx or y2 >= frame_h - my
