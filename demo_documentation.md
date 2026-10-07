@@ -354,7 +354,13 @@ filename `car-highway.mp4` is currently hardcoded in `server.py`
   upscaled to 1080p) — offered "to the research community free of charge",
   so treat it as research footage, not ours. Rebuild: download
   `agh_src{13,15,18,20,10,1,11,12,21}_hrc0.avi` and join them with
-  ffmpeg's `concat` filter (the concat *demuxer* fails on these AVIs).
+  ffmpeg's `concat` filter (the concat *demuxer* fails on these AVIs), then
+  keep the first 1:37 (`ffmpeg -i full.mp4 -t 97 -c:v libx264 -crf 20 -an
+  parking-entrance-barrier.mp4`): the five cars *entering* the garage, each
+  logged with a clear plate. The full 3:03 cut (with cars leaving) is kept on
+  the board at `~/Videos/parking-extras/`. When an entry-zone video loops,
+  the tracker is cleared (`VideoFileTrack.on_loop`), so the first car of the
+  next pass isn't mistaken for the last car of the previous one.
 - Describe uses the vehicle's latest best crop (the tracker keeps refining
   it after the card appears), and the default prompt puts the plate on its
   own line with an explicit "Plate: not readable" — see the comment on

@@ -57,6 +57,10 @@ class VideoFileTrack(VideoStreamTrack):
         super().__init__()
         self.file_path = file_path
         self.loop = loop
+        # Optional callback run each time the file loops back to the start
+        # (e.g. the /traffic parking demo clears its vehicle tracker so the
+        # last car of one pass isn't matched to the first car of the next).
+        self.on_loop = None
         self.container: Optional[av.container.InputContainer] = None
         self.stream: Optional[av.video.VideoStream] = None
         self._stopped = False
@@ -140,6 +144,8 @@ class VideoFileTrack(VideoStreamTrack):
             if self.loop and not self._stopped:
                 logger.info("Video file reached end, looping back to start")
                 await loop_asyncio.run_in_executor(None, self._restart)
+                if self.on_loop:
+                    self.on_loop()
                 self._playback_start_wallclock = None
                 self._first_frame_pts = None
                 frame = await loop_asyncio.run_in_executor(None, self._read_frame)

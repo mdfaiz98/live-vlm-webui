@@ -763,6 +763,12 @@ async def traffic_offer(request):
         relayed_video, yolo_detector, detection_callback=broadcast_traffic_detections
     )
     processor_track.set_entry_zone(TRAFFIC_ENTRY_ZONES.get(Path(video_path).name))
+    if processor_track.entry_zone is not None:
+        # On a loop, the last car of one pass and the first car of the next sit
+        # in the same spot at the barrier - the tracker would take them for one
+        # car (already logged) and skip the new one. Videos without a zone (the
+        # highway) keep their original behaviour.
+        video_track.on_loop = processor_track.reset_tracker
     traffic_active_processor_track = processor_track
     pc.addTrack(processor_track)
 

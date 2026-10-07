@@ -169,6 +169,11 @@ class DetectionVideoTrack(VideoStreamTrack):
             logger.error(f"Error processing detection frame: {e}", exc_info=True)
             raise
 
+    def reset_tracker(self):
+        """Forget all tracked vehicles (keeps the tracker's settings) - called
+        when an entry-zone video loops, see server.traffic_offer."""
+        self.tracker.tracks = []
+
     def _zone_px(self, w: int, h: int) -> Tuple[int, int, int, int]:
         zx1, zy1, zx2, zy2 = self.entry_zone
         return int(zx1 * w), int(zy1 * h), int(zx2 * w), int(zy2 * h)
