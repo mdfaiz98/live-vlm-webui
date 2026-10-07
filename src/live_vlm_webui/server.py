@@ -77,6 +77,7 @@ TRAFFIC_LABELS_PATH = _REPO_ROOT / "models" / "coco_labels.txt"
 TRAFFIC_VIDEO_PATH = _REPO_ROOT / "demo_assets" / "car-highway.mp4"
 TRAFFIC_MODELS_DIR = _REPO_ROOT / "models"
 TRAFFIC_VIDEOS_DIR = _REPO_ROOT / "demo_assets"
+TRAFFIC_UPLOADS_DIR = TRAFFIC_VIDEOS_DIR / "uploads"
 # Entry zone per demo video (x1, y1, x2, y2 as fractions of the frame) - only
 # vehicles inside it are drawn and logged (see DetectionVideoTrack.entry_zone).
 # The parking clip's zone is the ground in front of the barrier: street traffic
@@ -497,15 +498,53 @@ def traffic_get_detector(model_id: str) -> YoloDetector:
     return traffic_detectors[model_id]
 
 
-def traffic_list_videos():
-    """Videos selectable as the /traffic source: the files in demo_assets/."""
-    if not TRAFFIC_VIDEOS_DIR.is_dir():
+def _video_files(folder: Path):
+    if not folder.is_dir():
         return []
-    return [
-        {"id": str(path), "name": TRAFFIC_VIDEO_NAMES.get(path.name, path.stem.replace("-", " ").capitalize())}
-        for path in sorted(TRAFFIC_VIDEOS_DIR.iterdir())
-        if path.is_file() and path.suffix.lower() in ALLOWED_VIDEO_EXTENSIONS
+    return [p for p in sorted(folder.iterdir()) if p.is_file() and p.suffix.lower() in ALLOWED_VIDEO_EXTENSIONS]
+
+
+def traffic_list_videos():
+    """Videos selectable as the /traffic source: the demo videos in
+    demo_assets/, then videos uploaded from the settings drawer
+    (demo_assets/uploads/ - kept apart from the main demo's upload folder)."""
+    videos = [
+        {"id": str(p), "name": TRAFFIC_VIDEO_NAMES.get(p.name, p.stem.replace("-", " ").capitalize())}
+        for p in _video_files(TRAFFIC_VIDEOS_DIR)
     ]
+    videos += [{"id": str(p), "name": f"{p.name} (uploaded)"} for p in _video_files(TRAFFIC_UPLOADS_DIR)]
+    return videos
+
+
+async def traffic_upload(request):
+    """POST /api/traffic/upload (multipart field "file") - add a video to the
+    /traffic list, saved under its own (sanitized) name in demo_assets/uploads/."""
+    reader = await request.multipart()
+    field = await reader.next()
+    if field is None or field.name != "file":
+        return web.json_response({"error": "Expected a multipart field named 'file'"}, status=400)
+    original = field.filename or "video.mp4"
+    stem, ext = os.path.splitext(os.path.basename(original))
+    if ext.lower() not in ALLOWED_VIDEO_EXTENSIONS:
+        return web.json_response(
+            {"error": f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_VIDEO_EXTENSIONS))}"}, status=400
+        )
+    stem = re.sub(r"[^A-Za-z0-9._-]", "_", stem)[:60] or "video"
+    TRAFFIC_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    path, n = TRAFFIC_UPLOADS_DIR / f"{stem}{ext.lower()}", 2
+    while path.exists():  # never overwrite an earlier upload
+        path, n = TRAFFIC_UPLOADS_DIR / f"{stem}-{n}{ext.lower()}", n + 1
+    size = 0
+    with open(path, "wb") as f:
+        while chunk := await field.read_chunk(size=1024 * 1024):
+            size += len(chunk)
+            if size > MAX_VIDEO_UPLOAD_BYTES:
+                f.close()
+                path.unlink()
+                return web.json_response({"error": "File too large (max 2GB)"}, status=413)
+            f.write(chunk)
+    logger.info(f"[traffic] Video uploaded: {path} ({size} bytes)")
+    return web.json_response({"id": str(path), "name": f"{path.name} (uploaded)"})
 
 
 async def traffic_settings(request):
@@ -1628,6 +1667,7 @@ async def create_app(test_mode=False):
     app.router.add_get("/api/traffic/ws", traffic_websocket_handler)
     app.router.add_post("/api/traffic/offer", traffic_offer)
     app.router.add_get("/api/traffic/settings", traffic_settings)
+    app.router.add_post("/api/traffic/upload", traffic_upload)
 
     # RTSP endpoints
     app.router.add_post("/api/rtsp/start", rtsp_start)

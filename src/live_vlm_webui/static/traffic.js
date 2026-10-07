@@ -717,15 +717,19 @@
     const detectionModelHint = document.getElementById('detectionModelHint');
     const vlmModelSelect = document.getElementById('vlmModelSelect');
     const VIDEO_KEY = 'trafficVideo';
+    const videoUploadInput = document.getElementById('videoUploadInput');
+    const videoUploadStatus = document.getElementById('videoUploadStatus');
 
     function setHint(el, text, isError = false) {
         el.textContent = text;
         el.classList.toggle('error', isError);
     }
 
-    // The video the next connection plays, remembered across reloads (null = server default)
+    // The video the next connection plays. Kept for this tab only (reconnects,
+    // switching), so every fresh page load starts on the server default - the
+    // highway video. null = server default.
     function savedVideo() {
-        try { return localStorage.getItem(VIDEO_KEY); } catch (e) { return null; }
+        try { return sessionStorage.getItem(VIDEO_KEY); } catch (e) { return null; }
     }
 
     function fillSelect(select, options, value) {
@@ -772,7 +776,7 @@
 
     // Play this video: save it, then reconnect with it
     document.getElementById('applySourceBtn').addEventListener('click', () => {
-        try { localStorage.setItem(VIDEO_KEY, videoSelect.value); } catch (e) { /* storage blocked */ }
+        try { sessionStorage.setItem(VIDEO_KEY, videoSelect.value); } catch (e) { /* storage blocked */ }
         // A fresh connection starts with detection off; clear the old video's vehicles
         history = [];
         totalDetectionCount = 0;
@@ -789,6 +793,24 @@
         toggleBtn.textContent = 'Stop';
         toggleBtn.classList.remove('is-stopped');
         start();
+    });
+
+    videoUploadInput.addEventListener('change', async () => {
+        const file = videoUploadInput.files[0];
+        if (!file) return;
+        setHint(videoUploadStatus, `Uploading ${file.name}...`);
+        try {
+            const form = new FormData();
+            form.append('file', file);
+            const res = await fetch('/api/traffic/upload', { method: 'POST', body: form });
+            const out = await res.json();
+            if (!res.ok) throw new Error(out.error || 'Upload failed');
+            await loadSettings(out.id);
+            setHint(videoUploadStatus, `Added ${out.name} - click Play this video`);
+        } catch (e) {
+            setHint(videoUploadStatus, e.message, true);
+        }
+        videoUploadInput.value = '';
     });
 
     detectionModelSelect.addEventListener('change', () => {

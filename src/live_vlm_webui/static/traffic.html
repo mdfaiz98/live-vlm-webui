@@ -76,6 +76,9 @@ from index.html; see CLAUDE.md and VLM_Cascade_Architecture_Plan.md.
                 <div class="settings-group-title">Video Source</div>
                 <label for="videoSelect">Video</label>
                 <select id="videoSelect"></select>
+                <label for="videoUploadInput">Add a video</label>
+                <input type="file" id="videoUploadInput" accept=".mp4,.mov,.mkv,.avi,.webm,.m4v">
+                <div class="settings-hint" id="videoUploadStatus">Uploads to the board, then appears in the list</div>
                 <button class="prompt-action-btn primary settings-apply" id="applySourceBtn">Play this video</button>
             </section>
 
